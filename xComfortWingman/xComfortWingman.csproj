@@ -5,4 +5,10 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Device.Net" Version="2.7.0" />
+    <PackageReference Include="Hid.Net" Version="2.7.0" />
+    <PackageReference Include="System.IO.Ports" Version="4.6.0-preview4.19212.13" />
+  </ItemGroup>
+
 </Project>

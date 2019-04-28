@@ -6,11 +6,11 @@ using static xComfortWingman.Protocol.PT_RX.MGW_RX_DATA_TYPE;
 
 namespace xComfortWingman
 {
-    static class DeviceTypeList
+     class DeviceTypeList
     {
-        static public List<DeviceType> allDeviceTypes;
-        static void ListDeviceTypes()
+        public List<DeviceType> ListDeviceTypes()
         {
+            List<DeviceType> allDeviceTypes = new List<DeviceType>();
             allDeviceTypes.Add(new DeviceType(1, "push-button single", "PB", (1), new int[] { 1 }, new int[] { 0 }, new byte[] { MGW_RMT_ON, MGW_RMT_OFF, MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_DOWN_PRESSED, MGW_RMT_DOWN_RELEASED }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"));
             allDeviceTypes.Add(new DeviceType(2, "push-button dual", "PB", (2), new int[] { 2 }, new int[] { 0, 1 }, new byte[] { MGW_RMT_ON, MGW_RMT_OFF, MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_DOWN_PRESSED, MGW_RMT_DOWN_RELEASED }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"));
             allDeviceTypes.Add(new DeviceType(3, "push-button quad", "PB", (4), new int[] { 3 }, new int[] { 0, 1, 2, 3 }, new byte[] { MGW_RMT_ON, MGW_RMT_OFF, MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_DOWN_PRESSED, MGW_RMT_DOWN_RELEASED }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"));
@@ -81,6 +81,7 @@ namespace xComfortWingman
             allDeviceTypes.Add(new DeviceType(68, "Switching Actuator New Generation", "SA-NG", (74), new int[] { 3 }, new int[] { }, new byte[] { MGW_RMT_VALUE }, new byte[] { MGW_RDT_UINT32_3POINT }, "[Energy, MGW_RMT_kWh]"));
             allDeviceTypes.Add(new DeviceType(69, "Switching Actuator New Generation", "SA-NG", (74), new int[] { 4 }, new int[] { }, new byte[] { MGW_RMT_ON, MGW_RMT_OFF }, new byte[] { MGW_RDT_NO_DATA }, "[LoadError]"));
             allDeviceTypes.Add(new DeviceType(70, "Router New Generation", "RA-NG", (75), new int[] { 1, 2, 3, 4, 5 }, new int[] { }, new byte[] { MGW_RMT_ON, MGW_RMT_OFF }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"));
+            return allDeviceTypes;
         }
         
     }
