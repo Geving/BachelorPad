@@ -1,5 +1,24 @@
 ﻿namespace xComfortWingman.Protocol
 {
+    public static class PREDEFINED
+    {
+        public static readonly byte[] MGW_PRE_GET_TIMEACCOUNT = { 0x00, 0x04, 0xB2, 0x0A, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_COUNTER_RX = { 0x00, 0x04, 0xB2, 0x0B, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_COUNTER_TX = { 0x00, 0x04, 0xB2, 0x0C, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_SERIAL = { 0x00, 0x04, 0xB2, 0x0E, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_LED = { 0x00, 0x04, 0xB2, 0x0F, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_LED_STATUS = { 0x00, 0x04, 0xB2, 0x0F, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_LED_DEFAULT = { 0x00, 0x04, 0xB2, 0x0F, 0x01 };
+        public static readonly byte[] MGW_PRE_GET_LED_REVERSED = { 0x00, 0x04, 0xB2, 0x0F, 0x02 };
+        public static readonly byte[] MGW_PRE_GET_LED_OFF = { 0x00, 0x04, 0xB2, 0x0F, 0x03 };
+        public static readonly byte[] MGW_PRE_GET_LED_DIM = { 0x00, 0x04, 0xB2, 0x1A, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_RELEASE = { 0x00, 0x04, 0xB2, 0x1B, 0x00 };
+        public static readonly byte[] MGW_PRE_GET_REVISION = { 0x00, 0x04, 0xB2, 0x1B, 0x01 };
+        public static readonly byte[] MGW_CT_SEND_RFSEQNO = { 0x00, 0x04, 0xB2, 0x1E, 0x00 };
+        public static readonly byte[] MGW_CT_SEND_RFSEQNO_SET = { 0x00, 0x04, 0xB2, 0x1E, 0x01 };
+        public static readonly byte[] MGW_CT_SEND_RFSEQNO_CLR = { 0x00, 0x04, 0xB2, 0x1E, 0x0F };
+    }
+
     public static class MGW_TYPE
     {
         public const byte MGW_PT_TX = 0xB1;
@@ -338,6 +357,28 @@
 
     public static class PT_STATUS
     {
+
+        public class Packet
+        {
+            public byte MGW_LEN { get; set; }           //  1   0x08    Length of the packet in Byte
+            public byte MGW_TYPE { get; set; }          //  1   0xC3    MGW_PT_STATUS
+            public byte MGW_ST_TYPE { get; set; }       //  1           Indicates the type of Status messsage
+            public byte MGW_ST_STATUS { get; set; }     //  1
+            public byte[] MGW_ST_DATA { get; set; }     //  4           Contains the data for the status
+
+            //                 Length        Type           StatusType        Status                StatusData
+            public Packet(byte mGW_LEN, byte mGW_TYPE, byte mGW_ST_TYPE, byte mGW_ST_STATUS, byte[] mGW_ST_DATA)
+            {
+                MGW_LEN = mGW_LEN;
+                MGW_TYPE = mGW_TYPE;
+                MGW_ST_TYPE = mGW_ST_TYPE;
+                MGW_ST_STATUS = mGW_ST_STATUS;
+                MGW_ST_DATA = mGW_ST_DATA;
+                
+            }
+        }
+
+
         public static class MGW_ST_TYPE
         {
             public const byte MGW_STT_CONNEX = 0x02;          //  (Gateway-Status)
@@ -346,6 +387,8 @@
             public const byte MGW_STT_RS232_CRC = 0x06;
             public const byte MGW_STT_ERROR = 0x09;
             public const byte MGW_STT_TIMEACCOUNT = 0x0A;
+            public const byte MGW_STT_COUNTER_RX = 0x0B;
+            public const byte MGW_STT_COUNTER_TX = 0x0C;
             public const byte MGW_STT_SEND_OK_MRF = 0x0D;
             public const byte MGW_STT_SERIAL = 0x0E;
             public const byte MGW_STT_LED = 0x0F;
