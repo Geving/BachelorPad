@@ -75,7 +75,7 @@
             public const byte MGW_TED_UP_PRESSED = 0x54;      //	PB: pressed, upper button
             public const byte MGW_TED_UP_RELEASED = 0x55;     //	PB: released, upper button
             public const byte MGW_TED_DOWN_PRESSED = 0x56;    //	PB: pressed, lower button
-            public const byte MGW_TED_DOWN_RELEASED = 0x57;   //  PB: released, lower button
+            public const byte MGW_TED_DOWN_RELEASED = 0x57;   //    PB: released, lower button
 
             public const byte MGW_TED_DUMMY = 0x00;           //	REQUEST: get current status
 

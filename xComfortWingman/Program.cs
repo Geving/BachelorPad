@@ -32,6 +32,8 @@ namespace xComfortWingman
         static bool readyToTransmit = false;
         static bool bootComplete = false;
 
+        static bool useRAWmode = true;
+
         public static IMqttClient mqttClient;
         public static IDevice myDevice;
 
@@ -173,6 +175,23 @@ namespace xComfortWingman
                             {
                                 break;
                             }
+                        case "RAW":
+                            {
+                                //Because we only subscribe to RAW/in, we don't need to check topics[3]. It MUST be "in" to trigger this code.
+                                
+                                // The HEX data comes as plain text, which is right now stored as a byte array.
+                                string payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload).Replace(" ", ""); //Get the text from the payload and remove the spaces
+                                int NumberChars = payload.Length;
+                                byte[] payloadAsBytes = new byte[(NumberChars / 2)];
+                                for (int i = 0; i < NumberChars; i += 2) //Go through the payload two bytes pr step
+                                {
+                                    payloadAsBytes[i / 2] = Convert.ToByte(payload.Substring(i, 2), 16); //Convert "two bytes of text" into one byte of "data"
+                                }
+                                if(payloadAsBytes[0] != 0x00) { payloadAsBytes = AddZeroAsFirstByte(payloadAsBytes); }
+                                PrintByte(payloadAsBytes, "Sending RAW data");
+                                SendThenBlockTransmit(payloadAsBytes); //Send this to the interface for immediate transmit
+                                break;
+                            }
                         default:
                             {
                                 Console.WriteLine("Unknown topic: " + topics[2]);
@@ -184,16 +203,18 @@ namespace xComfortWingman
 
                 mqttClient.Connected += async (s, e) =>
                 {
-                    Console.WriteLine("### CONNECTED WITH SERVER ###");
+                    //Console.WriteLine("### CONNECTED WITH SERVER ###");
 
                     // Subscribe to a topic
                     await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/cmd/#").Build());
-                    Console.WriteLine("### SUBSCRIBED ###");
+                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/in").Build());
+                    //await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/out").Build()); // We don't need to subscribe to our own outbound messages...
+                    //Console.WriteLine("### SUBSCRIBED ###");
                 };
 
                 mqttClient.Disconnected += async (s, e) =>
                 {
-                    Console.WriteLine("### DISCONNECTED FROM SERVER ###");
+                    //Console.WriteLine("### DISCONNECTED FROM SERVER ###");
                     await Task.Delay(TimeSpan.FromSeconds(5));
 
                     try
@@ -214,11 +235,6 @@ namespace xComfortWingman
                 {
                     Console.WriteLine("### CONNECTING FAILED ###" + Environment.NewLine + exception);
                 }
-
-                Console.WriteLine("### WAITING FOR APPLICATION MESSAGES ###");
-
-                await mqttClient.SubscribeAsync(new TopicFilter("test", MqttQualityOfServiceLevel.AtMostOnce));
-
                 Console.WriteLine("Done connecting to MQTT server...");
             }
             catch (Exception ex)
@@ -386,7 +402,7 @@ namespace xComfortWingman
 
         static void IncommingData(byte[] dataFromCI) //We've got data from the CI
         {
-            if (dataFromCI[0] == 0) { dataFromCI = WindowsHidDevice.RemoveFirstByte(dataFromCI); } // CKOZ-00/14 triggers this, but CKOZ-00/03 doesn't...
+            if (dataFromCI[0] == 0) { dataFromCI = RemoveFirstByte(dataFromCI); } // CKOZ-00/14 triggers this, but CKOZ-00/03 doesn't...
             PrintByte(dataFromCI, "Incomming data");
             /*
             Example of an acknowledgement message (OK_MRF):
@@ -400,6 +416,11 @@ namespace xComfortWingman
             USB:            0C      C1      02      70      00          01          00      00      00      00      40      10
                             12 Byte Rx      Dp 2    Status  No Data     On                                          Signal  Mains pwr
             */
+
+            if (useRAWmode)
+            {
+                SendMQTTMessageAsync("BachelorPad/xComfort/RAW", FormatByteForPrint(dataFromCI, true));
+            }
 
             byte MGW_TYPE = dataFromCI[1];
             switch (MGW_TYPE){
@@ -1612,22 +1633,51 @@ namespace xComfortWingman
         
         public static void PrintByte(byte[] bytesToPrint, string caption, bool minimalistic) // Used for printing byte arrays as HEX values with spaces between. Makes reading much easier!
         {
-            Console.Write($"{caption}: ");
-            if (bytesToPrint[0] == 0) { bytesToPrint = WindowsHidDevice.RemoveFirstByte(bytesToPrint); } // Catches the issue with outbound data having an extra 0x00 to start with
+            Console.WriteLine($"{caption}: {FormatByteForPrint(bytesToPrint,minimalistic)}");
+            //if (bytesToPrint[0] == 0) { bytesToPrint = WindowsHidDevice.RemoveFirstByte(bytesToPrint); } // Catches the issue with outbound data having an extra 0x00 to start with
 
-            int printLength = bytesToPrint[0];
-            if (!minimalistic) { printLength = bytesToPrint.Length; } // If set, we only print the intended data, not the entire buffer that we actually have
+            //int printLength = bytesToPrint[0];
+            //if (!minimalistic) { printLength = bytesToPrint.Length; } // If set, we only print the intended data, not the entire buffer that we actually have
 
-            for (int i = 0; i < printLength; i++) 
-            {
-                Console.Write(Convert.ToString(bytesToPrint[i], 16).ToUpper().PadLeft(2, '0') + " ");
-            }
-            Console.WriteLine();
+            //for (int i = 0; i < printLength; i++) 
+            //{
+            //    Console.Write(Convert.ToString(bytesToPrint[i], 16).ToUpper().PadLeft(2, '0') + " ");
+            //}
+            //Console.WriteLine();
         }
 
         public static void PrintByte(byte[] bytesToPrint, string caption) // Shorter signature, defaults to minimalistic printing.
         {
             PrintByte(bytesToPrint, caption, true); // Defaults to true
+        }
+
+        public static string FormatByteForPrint(byte[] bytesToPrint, bool minimalistic)
+        {
+            string formatted = "";
+            if (bytesToPrint[0] == 0) { bytesToPrint = WindowsHidDevice.RemoveFirstByte(bytesToPrint); } // Catches the issue with outbound data having an extra 0x00 to start with
+
+            int printLength = bytesToPrint[0];
+            if (!minimalistic || printLength > bytesToPrint.Length) { printLength = bytesToPrint.Length; } // If set, we only print the intended data, not the entire buffer that we actually have
+             
+            for (int i = 0; i < printLength; i++)
+            {
+                formatted += (Convert.ToString(bytesToPrint[i], 16).ToUpper().PadLeft(2, '0') + " ");
+            }
+            return formatted;
+        }
+
+        public static byte[] RemoveFirstByte(byte[] arrayToShorten) //Returns a byte array where the first byte has been removed.
+        {
+            byte[] result = new byte[arrayToShorten.Length - 1];
+            Array.Copy(arrayToShorten, 1, result, 0, arrayToShorten.Length - 1);
+            return result;
+        }
+
+        public static byte[] AddZeroAsFirstByte(byte[] arrayToExpand)
+        {
+            byte[] result = new byte[arrayToExpand.Length + 1];
+            Array.Copy(arrayToExpand, 0, result, 1, arrayToExpand.Length);
+            return result;
         }
 
         #endregion
