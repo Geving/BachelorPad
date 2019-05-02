@@ -9,6 +9,7 @@
     <PackageReference Include="Device.Net" Version="2.7.0" />
     <PackageReference Include="Hid.Net" Version="2.7.0" />
     <PackageReference Include="MQTTnet" Version="2.8.5" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="System.IO.Ports" Version="4.6.0-preview4.19212.13" />
     <PackageReference Include="Usb.Net" Version="2.7.0" />
   </ItemGroup>

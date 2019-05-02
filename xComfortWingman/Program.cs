@@ -23,16 +23,10 @@ namespace xComfortWingman
     class Program
     {
         private static DebugLogger Logger = new DebugLogger();
-
-        static byte STARTBYTE = 0x5A;
-        static byte STOPBYTE = 0xA5; // Defined by protocol, but not used by actual device?
-
-        static Random random = new Random();
+        private static readonly Settings Settings = new Settings(true);
 
         static bool readyToTransmit = false;
         static bool bootComplete = false;
-
-        static bool useRAWmode = true;
 
         public static IMqttClient mqttClient;
         public static IDevice myDevice;
@@ -54,49 +48,62 @@ namespace xComfortWingman
 
             Console.WriteLine("Hi, I'm your xComfort Wingman!");
             Console.WriteLine("I'm here to talk to xComfort for you.");
+            Console.WriteLine();
+            Console.WriteLine("You talk to me using MQTT, and I'll talk to xComfort by using a Communication Interface (CKOZ-00/03 or CKOZ-00/14)");
+            Console.WriteLine("The default topic beginning is 'BacheclorPad/xComfort/', and can be changed in the settings.");
+            Console.WriteLine();
+            Console.WriteLine("Topics I subscribe to:           \t Topic is used for:");
+            Console.WriteLine("\t  BacheclorPad/xComfort/cmd/X/ \t\t Listening for instructions for datapoint X (X is a number)");
+            Console.WriteLine("\t  BacheclorPad/xComfort/get/X/ \t\t Requesting an updated status from datapoint X (X is a number)");
+            Console.WriteLine("\t* BacheclorPad/xComfort/RAW/in/\t\t Sends the payload as RAW data directly to the interface."); 
+            Console.WriteLine();
+            Console.WriteLine("Topics I publish to:             \t I publish when:");
+            Console.WriteLine("\t  BacheclorPad/xComfort/+/set/ \t\t When a device broadcasts data without receiving an instruction first.");
+            Console.WriteLine("\t  BacheclorPad/xComfort/+/ack/ \t\t When confirmation of a completed instruction is received.");
+            Console.WriteLine("\t* BacheclorPad/xComfort/RAW/   \t\t Reports all RAW data from the interface as it arrives.");
+            Console.WriteLine();
+            Console.WriteLine("\t* [RAW]\n\t  [This feature can be enabled or disabled in the settings.]");
+            Console.WriteLine("\t  [The data is formatted as a human readable string of HEX values with space between each value.]");
+            Console.WriteLine("\t  [Example: 06 1B 01 0A 01 00");
 
-            //Console.WriteLine("These are the outputs I can provide:");
-            
-            //Console.WriteLine("\tStatuses:\tON/OFF");
-            //Console.WriteLine("\tValues:\t100%, 0%, 42%, 21C, 0.7V, 1, 0");
-            //Console.WriteLine("\tEvents:\tButton released, Button pressed up, Button up");
-            //Console.WriteLine("\t");
-            //Console.WriteLine("\tIf you give me a list of datapoints to monitor, I'll provide specialized feedback for them.");
-            //Console.WriteLine("\tOtherwise I'll provide a more generic MQTT feedback that you can process at your own leasure.");
-            //Console.WriteLine("\t");
-            ////Console.WriteLine("\tRaiseEvent(Action, source=dp19, message=Cold, value=17.3"); // Pseudo code!
-            //Console.WriteLine("\t");
-            //Console.WriteLine("\t");
+            Console.WriteLine("Current timeout value: " + Settings.RMF_TIMEOUT);
 
             //ImportDatapoints();
             ImportDatapointsFromFile("c:\\misc\\Datenpunkte.txt");
 
-            //openSerialport();
-            //ConnectMQTTAsync();
-            //RunManagedClientAsync(); 
-            RunMQTTClientAsync();
-            ConnectToHIDAsync();
-
+            //Communications
+            RunMQTTClientAsync(); //Connecting to MQTT
+            if (Settings.CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE)
+            {
+                ConnectToHIDAsync(); //Connecting to CI via USB
+            }
+            else
+            {
+                openSerialport(); //Connecting to CI via RS232
+            }
+            
             Console.WriteLine("Startup complete!");
 
-            while (!bootComplete)
+            if (Settings.DEBUGMODE)
             {
-                //Do nothing but wait...
+                while (!bootComplete)
+                {
+                    //Do nothing but wait...
+                }
+                while (!readyToTransmit)
+                {
+                    //Do nothing but wait...
+                }
+                Console.WriteLine("Press Enter to do some diagnostics!");
+                Console.ReadLine();
+                SendDataToDP(5, 30);
+                Console.ReadLine();
+                SendDataToDP(5, 40);
+                Console.ReadLine();
+                SendDataToDP(5, 50);
+                Console.ReadLine();
+                SendDataToDP(5, 0);
             }
-            while (!readyToTransmit)
-            {
-                //Do nothing but wait...
-            }
-            Console.WriteLine("Press Enter to do some diagnostics!");
-            Console.ReadLine();
-            Console.ReadLine();
-            SendDataToDP(5, 30);
-            Console.ReadLine();
-            SendDataToDP(5, 40);
-            Console.ReadLine();
-            SendDataToDP(5, 50);
-            Console.ReadLine();
-            SendDataToDP(5, 0);
    
             while (true){
                 //Do nothing...
@@ -111,60 +118,75 @@ namespace xComfortWingman
                 // Create a new MQTT client.
                 var factory = new MqttFactory();
                 mqttClient = factory.CreateMqttClient();
-                var clientOptions = new MqttClientOptions
+
+                var ClientID = Settings.MQTT_CLIENT_ID.Replace("%rnd%", new Guid().ToString());
+
+                var Credentials = new MqttClientCredentials
                 {
-                    ChannelOptions = new MqttClientTcpOptions
-                    {
-                        Server = "192.168.0.3"
-                    }
+                    Username = Settings.MQTT_CRED_USERNAME,
+                    Password = Settings.MQTT_CRED_PASSWORD
                 };
 
-                // Create TCP based options using the builder.
-                var options = new MqttClientOptionsBuilder()
-                    .WithClientId("Client1")
-                    .WithTcpServer("192.168.0.3")
-                    //.WithCredentials("mySonoff", "pusur")
-                    //.WithTls()
-                    .WithCleanSession()
-                    .Build();
+                var TlsOptions = new MqttClientTlsOptions
+                {
+                    UseTls = Settings.MQTT_USE_TLS
+                };
 
-                // Use WebSocket connection.
-                //var options = new MqttClientOptionsBuilder()
-                //    .WithWebSocketServer("192.168.0.3:1883/mqtt")
-                //    .Build();
+                var ChannelOptions_WebSocket = new MqttClientWebSocketOptions
+                {
+                    Uri = Settings.MQTT_SERVER_WEBSOCKET,
+                    TlsOptions = TlsOptions
+                };
 
-                //var message = new MqttApplicationMessageBuilder()
-                //    .WithTopic("BachelorPad/xComfort/cmd")
-                //    .WithPayload("Hello World!")
-                //    .WithExactlyOnceQoS()
-                //    .WithRetainFlag(false)
-                //    .Build();
-                //await mqttClient.PublishAsync(message);
+                var ChannelOptions_TCP = new MqttClientTcpOptions
+                {
+                    Server = Settings.MQTT_SERVER_TCP,
+                    TlsOptions = TlsOptions
+                };
+                
+                var clientOptions = new MqttClientOptions();
 
+                if (Settings.MQTT_CONNECTION_MODE == MQTT_CONNECTION_MODE.TCP)
+                {
+                    clientOptions = new MqttClientOptions
+                    {
+                        CleanSession = Settings.MQTT_CLEAN_SESSION,
+                        ClientId = ClientID,
+                        Credentials = Credentials,
+                        ChannelOptions = ChannelOptions_TCP
+                    };
+                }
+                else
+                {
+                    clientOptions = new MqttClientOptions
+                    {
+                        CleanSession = Settings.MQTT_CLEAN_SESSION,
+                        ClientId = ClientID,
+                        Credentials = Credentials,
+                        ChannelOptions = ChannelOptions_WebSocket
+                    };
+
+                }
 
 
                 mqttClient.ApplicationMessageReceived += (s, e) =>
                 {
-                    //Console.WriteLine("### RECEIVED APPLICATION MESSAGE ###");
-                    //Console.WriteLine($"+ Topic = {e.ApplicationMessage.Topic}");
-                    //Console.WriteLine($"+ Payload = {Encoding.UTF8.GetString(e.ApplicationMessage.Payload)}");
-                    //Console.WriteLine($"+ QoS = {e.ApplicationMessage.QualityOfServiceLevel}");
-                    //Console.WriteLine($"+ Retain = {e.ApplicationMessage.Retain}");
-                    //Console.WriteLine();
                     string[] topics = e.ApplicationMessage.Topic.Split("/");
-                    if (topics.Length < 3)
+                    int basePathLevels = Settings.MQTT_BASEPATH.Split("/").Length;
+                    if (topics.Length < basePathLevels+1)
                     {
-                        Console.WriteLine("To few subtopics!");
+                        Console.WriteLine("Invalid topic path!");
                         return;
                     }
-                    switch (topics[2])
+                    switch (topics[basePathLevels])
                     {
                         case "cmd":
                             {
                                 try
                                 {
-                                    SendDataToDP(Convert.ToInt32(topics[3]), Convert.ToInt32(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)));
-                                }catch (Exception ex)
+                                    SendDataToDP(Convert.ToInt32(topics[basePathLevels + 1]), Convert.ToInt32(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)));
+                                }
+                                catch (Exception ex)
                                 {
                                     Console.WriteLine(ex.Message);
                                 }
@@ -178,7 +200,7 @@ namespace xComfortWingman
                         case "RAW":
                             {
                                 //Because we only subscribe to RAW/in, we don't need to check topics[3]. It MUST be "in" to trigger this code.
-                                
+
                                 // The HEX data comes as plain text, which is right now stored as a byte array.
                                 string payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload).Replace(" ", ""); //Get the text from the payload and remove the spaces
                                 int NumberChars = payload.Length;
@@ -187,9 +209,34 @@ namespace xComfortWingman
                                 {
                                     payloadAsBytes[i / 2] = Convert.ToByte(payload.Substring(i, 2), 16); //Convert "two bytes of text" into one byte of "data"
                                 }
-                                if(payloadAsBytes[0] != 0x00) { payloadAsBytes = AddZeroAsFirstByte(payloadAsBytes); }
+                                //if (payloadAsBytes[0] != 0x00) { payloadAsBytes = AddZeroAsFirstByte(payloadAsBytes); }
+                                //if (Settings.CONNECTION_MODE==CI_CONNECTION_MODE.RS232_MODE) { payloadAsBytes = AddRS232Bytes(payloadAsBytes); }
                                 PrintByte(payloadAsBytes, "Sending RAW data");
                                 SendThenBlockTransmit(payloadAsBytes); //Send this to the interface for immediate transmit
+                                break;
+                            }
+                        case "config":
+                            {
+                                switch(topics[basePathLevels + 1])
+                                {
+                                    case "loadsettings":
+                                    case "getsettings":
+                                        {
+                                            SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.GetSettingsAsJSON());
+                                            break;
+                                        }
+                                    case "savesettings":
+                                    case "setsettings":
+                                        {
+                                            SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
+                                            break;
+                                        }
+                                    default:
+                                        {
+                                            Console.WriteLine($"Unknown config request: {topics[basePathLevels + 1]}");
+                                            break;
+                                        }
+                                }
                                 break;
                             }
                         default:
@@ -203,11 +250,16 @@ namespace xComfortWingman
 
                 mqttClient.Connected += async (s, e) =>
                 {
-                    //Console.WriteLine("### CONNECTED WITH SERVER ###");
+                    Console.WriteLine("### CONNECTED WITH SERVER ###");
 
                     // Subscribe to a topic
                     await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/cmd/#").Build());
                     await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/in").Build());
+                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/").Build());
+                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/getsettings").Build());
+                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/setsettings").Build());
+                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/loadsettings").Build());
+                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/savesettings").Build());
                     //await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/out").Build()); // We don't need to subscribe to our own outbound messages...
                     //Console.WriteLine("### SUBSCRIBED ###");
                 };
@@ -279,6 +331,11 @@ namespace xComfortWingman
         public static async void SendThenBlockTransmit(byte[] dataToSend)
         {
             readyToTransmit = false;    // Stop any other thread from sending right now
+
+            // Prepare the packet by adding extra bytes if needed.
+            if (Settings.CONNECTION_MODE == CI_CONNECTION_MODE.RS232_MODE) { dataToSend = AddRS232Bytes(dataToSend); }
+            if (dataToSend[0] != 0x00 && dataToSend[0] != Settings.RS232_STARTBYTE ) { dataToSend = AddZeroAsFirstByte(dataToSend); }
+
             Array.Resize(ref dataToSend, myDevice.ConnectedDeviceDefinition.WriteBufferSize.Value); //If we don't fill the buffer, it will repeat the data instead of using 0x00. That causes strangeness...
 
             DateTime start = DateTime.Now;
@@ -305,26 +362,23 @@ namespace xComfortWingman
                
         public static void openSerialport()
         {
-            //using (SerialPort com = new SerialPort("COM9"))  //(TCSupport.LocalMachineSerialInfo.FirstAvailablePortName))
-            //{
-                //SerialPortProperties serPortProp = new SerialPortProperties();
-                SerialPort com = new SerialPort("COM9");
-                com.BaudRate = 9600; // 57600;
-                com.StopBits = StopBits.One;
-                com.Parity = Parity.None;
-                //com.ReceivedBytesThreshold = 5;
-                com.DataReceived += new SerialDataReceivedEventHandler(DataReceivedHandler);
+            SerialPort com = new SerialPort(Settings.RS232_PORT,Settings.RS232_BAUD)
+            {
+                StopBits = StopBits.One,
+                Parity = Parity.None
+            };
 
+            com.DataReceived += new SerialDataReceivedEventHandler(DataReceivedHandler);
+            
+            com.Open();
+            Console.WriteLine($"{com.PortName} is open: " + com.IsOpen);
 
-                com.Open();
-                Console.WriteLine("COM9 is open: " + com.IsOpen);
-            //: 5A 06 B1 02 0A 01 70 A5
-            byte[] myCommand = { 0x5A, 0x04, 0xB2, 0x03, 0x04, 0xA5 };  //{ 0x5A, 0x06, 0xB1, 0x02, 0x0A, 0x01, 0x70, 0xA5 };
-                com.Write(myCommand, 0, 6);
-                Console.WriteLine("BytesToWrite={0}", com.BytesToWrite);
-                
-                
-            //}
+            //{ 0x5A, 0x06, 0xB1, 0x02, 0x0A, 0x01, 0x70, 0xA5 }; // Turns on DP #2
+
+            byte[] myCommand = { 0x5A, 0x04, 0xB2, 0x1B, 0x00, 0xA5 }; // Requests the software versions of the interface 
+            PrintByte(myCommand, "Requesting software version");
+            com.Write(myCommand, 0, 6);
+            
         }
 
         private static void DataReceivedHandler(object sender, SerialDataReceivedEventArgs e)
@@ -336,7 +390,7 @@ namespace xComfortWingman
             int cmdLength = 0;
             foreach (byte b in myData)
             {
-                if (b == STARTBYTE) {
+                if (b == Settings.RS232_STARTBYTE) {
                     acceptingData = true;
                     continue;
                 }
@@ -348,8 +402,10 @@ namespace xComfortWingman
                     if (cmdLength>0 && receivedData.Count == (cmdLength-0)){
                         //We are done!
                         acceptingData = false;
-                        PrintByte(receivedData.ToArray(), "Data");
-                        IncommingData(receivedData.ToArray());
+                        byte[] dataAsBytes = receivedData.ToArray();
+                        dataAsBytes = RemoveRS232Bytes(dataAsBytes);
+                        PrintByte(dataAsBytes, "Serial data");
+                        IncommingData(dataAsBytes);
                         receivedData.Clear();
                     }
                     //Console.Write(Convert.ToString(b, 16).PadLeft(2, '0') + " ");
@@ -357,11 +413,19 @@ namespace xComfortWingman
             }
         }
 
-        private static void broadcastChange(int dataPointID, string dataValue){
+        private static async void broadcastChange(int dataPointID, string dataValue){
             //This is where we tell BachelorPad about the change that has been made.
             //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
-            Console.WriteLine("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just changed value to " + dataValue);
-            SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+            Console.WriteLine("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just reported value " + dataValue);
+            await SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+        }
+
+        private static async void broadcastAck(int dataPointID, string dataValue)
+        {
+            //This is where we tell BachelorPad about the change that has been made.
+            //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
+            Console.WriteLine("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just confirmed value " + dataValue);
+            await SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
         }
 
         private static void ImportDatapointsFromFile(String filePath)
@@ -400,7 +464,7 @@ namespace xComfortWingman
             datapoints.Add(new Datapoint(Convert.ToInt32(line[0]), line[1], Convert.ToInt32(line[2]), Convert.ToInt32(line[3]), Convert.ToInt32(line[4]), Convert.ToInt32(line[5]), Convert.ToInt32(line[6]), line[7]));
         }
 
-        static void IncommingData(byte[] dataFromCI) //We've got data from the CI
+        static async void IncommingData(byte[] dataFromCI) //We've got data from the CI
         {
             if (dataFromCI[0] == 0) { dataFromCI = RemoveFirstByte(dataFromCI); } // CKOZ-00/14 triggers this, but CKOZ-00/03 doesn't...
             PrintByte(dataFromCI, "Incomming data");
@@ -417,9 +481,9 @@ namespace xComfortWingman
                             12 Byte Rx      Dp 2    Status  No Data     On                                          Signal  Mains pwr
             */
 
-            if (useRAWmode)
+            if (Settings.RAW_ENABLED)
             {
-                SendMQTTMessageAsync("BachelorPad/xComfort/RAW", FormatByteForPrint(dataFromCI, true));
+               await SendMQTTMessageAsync("BachelorPad/xComfort/RAW", FormatByteForPrint(dataFromCI, true));
             }
 
             byte MGW_TYPE = dataFromCI[1];
@@ -681,6 +745,7 @@ namespace xComfortWingman
                                         case 0x10://MGW_STD_OKMRF_ACK_DIRECT        RF ≥90: ACK from controlled device
                                             {
                                                 Console.WriteLine("MRF OK! (Direct)");
+                                                //broadcastAck()
                                                 break;
                                             }
 
@@ -956,7 +1021,7 @@ namespace xComfortWingman
         }
       
 
-        static void HandleRX(PT_RX.Packet rxPacket, bool assignPacket) // Handling packets containing info about other devices
+        static async void HandleRX(PT_RX.Packet rxPacket, bool assignPacket) // Handling packets containing info about other devices
         {
             try
             {
@@ -1066,6 +1131,7 @@ namespace xComfortWingman
                         case MGW_RMT_STATUS:
                             {
                                 //Data about the current status
+                                broadcastAck(rxPacket.MGW_RX_DATAPOINT, rxPacket.MGW_RX_INFO_SHORT.ToString());
                                 break;
                             }
                         case MGW_RMT_BASIC_MODE:
@@ -1300,7 +1366,8 @@ namespace xComfortWingman
         }
 
         #region "Helpers"
-        static int CInt(String strToConvert) // VB.NET syntax
+
+        static int CInt(String strToConvert) // VB.NET syntax, nast habit to get rid of...
         {
             return Convert.ToInt32(strToConvert);
         }
@@ -1518,132 +1585,9 @@ namespace xComfortWingman
             return "Nothing";
         }
         
-        //private static object _GetDataFromPacket(byte[] mgw_rx_data,byte mgw_rx_data_type)
-        //{
-        //    switch (mgw_rx_data_type){
-        //        case MGW_RDT_NO_DATA: // No data
-        //            {
-        //                return null;
-        //            }
-        //        case MGW_RDT_PERCENT: // 1 byte: 0 = 0% ; 255 = 100%
-        //            {
-        //                int percentage = mgw_rx_data[0] / 255;
-        //                return percentage;
-        //            }
-        //        case MGW_RDT_UINT8: // 1 byte, integer number unsigned
-        //            {
-        //                int value = mgw_rx_data[0];
-        //                return value;
-        //            }
-        //        case MGW_RDT_INT16_1POINT: // 2 bytes, signed with one decimal (0x00FF => 25.5; 0xFFFF => -0.1)
-        //            {
-        //                double value = BitConverter.ToInt16(mgw_rx_data, 2);
-        //                value = value / 10;
-        //                return value;
-        //            }
-        //        case MGW_RDT_FLOAT: // 4 bytes, 32-bit floating-point number(IEEE 754)
-        //            {
-        //                return BitConverter.ToSingle(mgw_rx_data, 0);
-        //            }
-        //        case MGW_RDT_UINT16: // 2 bytes, integer number unsigned
-        //            {
-        //                return BitConverter.ToUInt16(mgw_rx_data, 2);
-        //            }
-        //        case MGW_RDT_UINT16_1POINT: // 2 bytes, integer unsigned, value x10   (1 digit after point)
-        //            {
-        //                double value = BitConverter.ToUInt16(mgw_rx_data, 2);
-        //                value = value / 10;
-        //                return value;
-        //            }
-        //        case MGW_RDT_UINT16_2POINT: // 2 bytes, integer unsigned, value x100   (2 digits after point)
-        //            {
-        //                double value = BitConverter.ToUInt16(mgw_rx_data, 2);
-        //                value = value / 100;
-        //                return value;
-        //            }
-        //        case MGW_RDT_UINT16_3POINT: // 2 bytes, integer unsigned, value x1000   (3 digits after point)
-        //            {
-        //                double value = BitConverter.ToUInt16(mgw_rx_data, 2);
-        //                value = value / 1000;
-        //                return value;
-        //            }
-        //        case MGW_RDT_UINT32: // 4 bytes, integer number unsigned
-        //            {
-        //                return BitConverter.ToUInt32(mgw_rx_data, 0);
-        //            }
-        //        case MGW_RDT_UINT32_1POINT: // 4 bytes, integer unsigned, value x10   (1 digit after point)
-        //            {
-        //                double value = BitConverter.ToUInt32(mgw_rx_data, 0);
-        //                value = value / 10;
-        //                return value;
-        //            }
-        //        case MGW_RDT_UINT32_2POINT: // 4 bytes, integer unsigned, value x100   (2 digits after point)
-        //            {
-        //                double value = BitConverter.ToUInt32(mgw_rx_data, 0);
-        //                value = value / 100;
-        //                return value;
-        //            }
-        //        case MGW_RDT_UINT32_3POINT: // 4 bytes, integer unsigned, value x1000   (3 digits after point)
-        //            {
-        //                double value = BitConverter.ToUInt32(mgw_rx_data, 0);
-        //                value = value / 1000;
-        //                return value;
-        //            }
-        //        case MGW_RDT_RC_DATA: // 4 bytes(only with room controller) : two values, first temperature, then adjustment wheel
-        //            {
-        //                double[] values = new double[2];
-        //                values[0] = BitConverter.ToUInt16(mgw_rx_data, 0);
-        //                values[0] = values[0] / 10;
-
-        //                values[1] = BitConverter.ToUInt16(mgw_rx_data, 2);
-                        
-        //                return values;
-        //            }
-        //        case MGW_RDT_TIME: // 4 bytes: hour/minute/second/0; example: 23h 59m 59s: 23 59 59 00 = Hex(17 3B 3B 00)
-        //            {
-        //                return ("{0}:{1}:{2}", mgw_rx_data[0], mgw_rx_data[1], mgw_rx_data[2]);
-        //            }
-        //        case MGW_RDT_DATE: // 4 bytes: day / weekday&month / century / year; weekday is placed in the high nibble of 2nd Byte, 0=monday, ... 6=sunday; example: sunday, december 31st 2005: 31 108 20 05 = Hex(1F 6C 14 05)
-        //            {
-        //                // We need to separate out the weekday from the month
-        //                byte maskMonth = 0x0F;      // 00001111
-        //                byte month = mgw_rx_data[1];
-        //                month &= maskMonth;
-
-        //                //We don't really need this data, as the any modern computer system can get the weekday from a date very easily!
-        //                //byte weekday = mgw_rx_data[1];
-        //                //byte maskWeekday = 0xF0;    // 11110000
-        //                //weekday &= maskWeekday;
-                        
-        //                //Return the data as a ISO 8601 formatted string
-        //                return ("{0}{1}-{1}-{2}", mgw_rx_data[2], mgw_rx_data[3], month, mgw_rx_data[0]);
-        //            }
-        //        case MGW_RDT_ROSETTA: // 4 bytes
-        //            {
-        //                return mgw_rx_data;
-        //            }
-        //        case MGW_RDT_HRV_OUT: // 4 bytes
-        //            {
-        //                return mgw_rx_data;
-        //            }
-        //    }
-        //    return null;
-        //}
-
-        
         public static void PrintByte(byte[] bytesToPrint, string caption, bool minimalistic) // Used for printing byte arrays as HEX values with spaces between. Makes reading much easier!
         {
             Console.WriteLine($"{caption}: {FormatByteForPrint(bytesToPrint,minimalistic)}");
-            //if (bytesToPrint[0] == 0) { bytesToPrint = WindowsHidDevice.RemoveFirstByte(bytesToPrint); } // Catches the issue with outbound data having an extra 0x00 to start with
-
-            //int printLength = bytesToPrint[0];
-            //if (!minimalistic) { printLength = bytesToPrint.Length; } // If set, we only print the intended data, not the entire buffer that we actually have
-
-            //for (int i = 0; i < printLength; i++) 
-            //{
-            //    Console.Write(Convert.ToString(bytesToPrint[i], 16).ToUpper().PadLeft(2, '0') + " ");
-            //}
-            //Console.WriteLine();
         }
 
         public static void PrintByte(byte[] bytesToPrint, string caption) // Shorter signature, defaults to minimalistic printing.
@@ -1651,7 +1595,7 @@ namespace xComfortWingman
             PrintByte(bytesToPrint, caption, true); // Defaults to true
         }
 
-        public static string FormatByteForPrint(byte[] bytesToPrint, bool minimalistic)
+        public static string FormatByteForPrint(byte[] bytesToPrint, bool minimalistic) // Returns a string where the byte array has been written out in HEX with spaces between each value.
         {
             string formatted = "";
             if (bytesToPrint[0] == 0) { bytesToPrint = WindowsHidDevice.RemoveFirstByte(bytesToPrint); } // Catches the issue with outbound data having an extra 0x00 to start with
@@ -1666,18 +1610,41 @@ namespace xComfortWingman
             return formatted;
         }
 
-        public static byte[] RemoveFirstByte(byte[] arrayToShorten) //Returns a byte array where the first byte has been removed.
+        public static byte[] RemoveFirstByte(byte[] arrayToFix) //Returns a byte array where the first byte has been removed.
         {
-            byte[] result = new byte[arrayToShorten.Length - 1];
-            Array.Copy(arrayToShorten, 1, result, 0, arrayToShorten.Length - 1);
+            byte[] result = new byte[arrayToFix.Length - 1];
+            Array.Copy(arrayToFix, 1, result, 0, arrayToFix.Length - 1);
             return result;
         }
 
-        public static byte[] AddZeroAsFirstByte(byte[] arrayToExpand)
+        public static byte[] AddZeroAsFirstByte(byte[] arrayToFix) //Returns a byte array where an extra 0x00 has been added at the beginning.
         {
-            byte[] result = new byte[arrayToExpand.Length + 1];
-            Array.Copy(arrayToExpand, 0, result, 1, arrayToExpand.Length);
+            byte[] result = new byte[arrayToFix.Length + 1];
+            Array.Copy(arrayToFix, 0, result, 1, arrayToFix.Length);
             return result;
+        }
+
+        public static byte[] AddRS232Bytes(byte[] arrayToFix) //Returns an array with the extra start and stop bytes required for RS232 communication.
+        {
+            byte[] result = new byte[arrayToFix.Length + 2];
+            Array.Copy(arrayToFix, 0, result, 1, arrayToFix.Length);
+            result[0] = Settings.RS232_STARTBYTE;
+            result[result.Length - 1] = Settings.RS232_STOPTBYTE;
+            return result;
+        }
+
+        public static byte[] RemoveRS232Bytes(byte[] arrayToFix) //Returns a shorter array with the RS232 bytes removed.
+        {
+            if (arrayToFix[0] == Settings.RS232_STARTBYTE) //Check that the first byte actually IS a RS232 start byte
+            {
+                byte[] result = new byte[arrayToFix.Length - 2];
+                Array.Copy(arrayToFix, 1, result, 0, arrayToFix.Length - 2);
+                return result;
+            }
+            else //The array isn't properly RS232 formatted, best leave it alone...
+            {
+                return arrayToFix;
+            }
         }
 
         #endregion
