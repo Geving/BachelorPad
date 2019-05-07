@@ -17,6 +17,7 @@ using System.Text;
 using MQTTnet.Protocol;
 using System.Linq;
 using Usb.Net.Windows;
+using Device.Net.LibUsb;
 
 namespace xComfortWingman
 {
@@ -69,7 +70,7 @@ namespace xComfortWingman
             Console.WriteLine("Current timeout value: " + Settings.RMF_TIMEOUT);
 
             //ImportDatapoints();
-            ImportDatapointsFromFile("c:\\misc\\Datenpunkte.txt");
+            ImportDatapointsFromFile("Datenpunkte.txt");
 
             //Communications
             RunMQTTClientAsync(); //Connecting to MQTT
@@ -296,9 +297,14 @@ namespace xComfortWingman
         }
 
         public static async Task ConnectToHIDAsync()
-        {  
-            WindowsHidDeviceFactory.Register(Logger);
-            //WindowsUsbDeviceFactory.Register(Logger);
+        {
+            
+#if (true)
+            LibUsbUsbDeviceFactory.Register();
+#else
+            WindowsUsbDeviceFactory.Register();
+            WindowsHidDeviceFactory.Register();
+#endif    
 
             var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
             {
