@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using MQTTnet;
@@ -13,15 +14,12 @@ namespace xComfortWingman
     {
         private IMqttClient mqttClient;
 
-        //public IMqttClient RunMQTTClientAsync()//Settings settings)
         public async Task RunMQTTClientAsync()
         {
             try
             {
                 Settings settings = Program.Settings;
-                // Create a new MQTT client.
                 var factory = new MqttFactory();
-                //IMqttClient mqttClient = factory.CreateMqttClient();
                 mqttClient = factory.CreateMqttClient();
 
                 var ClientID = settings.MQTT_CLIENT_ID.Replace("%rnd%", new Guid().ToString());
@@ -58,7 +56,8 @@ namespace xComfortWingman
                         CleanSession = settings.MQTT_CLEAN_SESSION,
                         ClientId = ClientID,
                         Credentials = Credentials,
-                        ChannelOptions = ChannelOptions_TCP
+                        ChannelOptions = ChannelOptions_TCP,
+                        CommunicationTimeout = TimeSpan.FromSeconds(3)
                     };
                 }
                 else
@@ -68,7 +67,8 @@ namespace xComfortWingman
                         CleanSession = settings.MQTT_CLEAN_SESSION,
                         ClientId = ClientID,
                         Credentials = Credentials,
-                        ChannelOptions = ChannelOptions_WebSocket
+                        ChannelOptions = ChannelOptions_WebSocket,
+                        CommunicationTimeout = TimeSpan.FromSeconds(3)
                     };
 
                 }
@@ -155,51 +155,69 @@ namespace xComfortWingman
 
                 mqttClient.Connected += async (s, e) =>
                 {
-                    DoLog("Connected to MQTT server!");
-
-                    // Subscribe to a topic
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/cmd/#").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/in").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/getsettings").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/setsettings").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/loadsettings").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/savesettings").Build());
-                    //await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/out").Build()); // We don't need to subscribe to our own outbound messages...
-                    //DoLog("### SUBSCRIBED ###");
+                    try
+                    {
+                        // Subscribe to a topic
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/cmd/#").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/in").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/getsettings").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/setsettings").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/loadsettings").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/savesettings").Build());
+                        //await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/out").Build()); // We don't need to subscribe to our own outbound messages...
+                    } catch (Exception exception)
+                    {
+                        DoLog(exception.Message, 4);
+                    }
                 };
 
                 mqttClient.Disconnected += async (s, e) =>
                 {
-                    //DoLog("### DISCONNECTED FROM SERVER ###");
                     await Task.Delay(TimeSpan.FromSeconds(5));
 
+                    //DoLog("Reconnecting to MQTT server...", false);
                     try
                     {
                         await mqttClient.ConnectAsync(clientOptions);
-                    }
-                    catch
+                        if (mqttClient.IsConnected)
+                        {
+                            //DoLog("OK", 3, true, 10);
+                        }
+                        else
+                        {
+                            DoLog("Reconnecting to MQTT server...", false);
+                            DoLog("FAIL", 3, true, 14);
+                        }
+                    } catch (Exception exception)
                     {
-                        DoLog("Failed to reconnect to MQTT server!");
+                        DoLog("Reconnecting to MQTT server...", false);
+                        DoLog("ERROR", 3, true, 12);
+                        DoLog(exception.Message, 4);
                     }
                 };
 
-                //return mqttClient;
                 try
                 {
                     DoLog("Connecting to MQTT server...", false);
                     await mqttClient.ConnectAsync(clientOptions);
                     if (mqttClient.IsConnected)
                     {
-                        DoLog("OK", 3, true, 10);
+                        DoLog("OK", 3, false, 10);
+                        Stopwatch stopwatch = new Stopwatch();
+                        stopwatch.Start();
+                        await mqttClient.PublishAsync(new MqttApplicationMessage { Topic = "BachelorPad", Payload = Encoding.UTF8.GetBytes("Connected!"), QualityOfServiceLevel = MqttQualityOfServiceLevel.AtLeastOnce, Retain = false });
+                        stopwatch.Stop();
+                        DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                     }
                     else
                     {
-                        DoLog("FAIL", 3, true, 12);
+                        DoLog("FAIL", 3, true, 14);
                     }
                 }
                 catch (Exception exception)
                 {
+                    DoLog("ERROR", 3, true, 12);
                     DoLog("Connection failed!" + Environment.NewLine + exception);
                 }
             }
@@ -211,21 +229,46 @@ namespace xComfortWingman
         }
         public async Task SendMQTTMessageAsync(string topic, string payload)
         {
-            try
+            if (mqttClient.IsConnected)
             {
-                var message = new MqttApplicationMessageBuilder()
-                   .WithTopic(topic)
-                   .WithPayload(payload)
-                   .WithExactlyOnceQoS()
-                   .WithRetainFlag(false)
-                   .Build();
-                await mqttClient.PublishAsync(message);
-                return;
-            } catch (Exception exception)
+                try
+                {
+                    //Random random = new Random();
+                    //int r = random.Next();
+                    //DoLog($"Preparing and publishing message ", false);
+                    //DoLog(r.ToString(), 3, true, 13);
+                    //Stopwatch stopwatch = new Stopwatch();
+                    //stopwatch.Start();
+                    //await mqttClient.PublishAsync(new MqttApplicationMessage { Topic = topic, Payload = Encoding.UTF8.GetBytes(payload), QualityOfServiceLevel = MqttQualityOfServiceLevel.AtLeastOnce, Retain = false });
+                    //stopwatch.Stop();
+                    //DoLog($"Sending message ", false);
+                    //DoLog(r.ToString(), 3, false, 13);
+                    //DoLog($" the first time took {stopwatch.ElapsedMilliseconds}ms.", 2);
+                    //stopwatch.Reset();
+
+                    //stopwatch.Start();                   
+                    var message = new MqttApplicationMessageBuilder()
+                       .WithTopic(topic)
+                       .WithPayload(payload)
+                       .WithAtLeastOnceQoS()
+                       .WithRetainFlag(false)
+                       .Build();
+                    await mqttClient.PublishAsync(message);
+                    //stopwatch.Stop();
+                    //DoLog($"Sending message ", false);
+                    //DoLog(r.ToString(), 3, false, 13);
+                    //DoLog($" the second time took {stopwatch.ElapsedMilliseconds}ms.",2);
+                    return;
+                }
+                catch (Exception exception)
+                {
+                    DoLog(exception.Message, 5);
+                }
+
+            } else
             {
-                DoLog(exception.Message, 5);
+                DoLog("MQTT client NOT connected to server!", 4);
             }
-            
         }
 
 

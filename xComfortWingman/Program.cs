@@ -41,11 +41,12 @@ namespace xComfortWingman
         //public static LibUsbDotNet.UsbDevice myDevice;
 #else
         public static HidDevice myDevice;
+        public static HidStream myHidStream;
 #endif
         public static List<Datapoint> datapoints;
         public static List<DeviceType> devicetypes;
-        public static List<byte> receivedData = new List<byte>();
-        public static bool acceptingData = false;
+        private static List<byte> receivedData = new List<byte>();
+        private static bool acceptingData = false;
 
         public static byte sequenceCounter = 0x00;
         public static byte[][] messageHistory = new byte[15][];
@@ -56,7 +57,7 @@ namespace xComfortWingman
             DeviceTypeList dtl = new DeviceTypeList();
             devicetypes = dtl.ListDeviceTypes();
 
-            Console.ForegroundColor = ConsoleColor.Cyan;
+            //Console.ForegroundColor = ConsoleColor.Cyan;
             DoLog("Hi, I'm your xComfort Wingman!");
             //DoLog("I'm here to talk to xComfort for you.");
             //DoLog();
@@ -76,7 +77,7 @@ namespace xComfortWingman
             //DoLog("\t* [RAW]\n\t  [This feature can be enabled or disabled in the settings.]");
             //DoLog("\t  [The data is formatted as a human readable string of HEX values with space between each value.]");
             //DoLog("\t  [Example: 06 1B 01 0A 01 00");
-            Console.ForegroundColor = ConsoleColor.Gray;
+            //Console.ForegroundColor = ConsoleColor.Gray;
             //DoLog("Current timeout value: " + Settings.RMF_TIMEOUT);
 
             DoAllTheStuff();
@@ -93,9 +94,16 @@ namespace xComfortWingman
 
             //Communications
             await mqtt.RunMQTTClientAsync(); //Connecting to MQTT
+            //IncommingData(new byte[] { 0x00, 0x04, 0x22, 0x33, 0x44 });
+
             if (Settings.CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE)
             {
-                await ConnectToCIasHid(); //Connecting to CI as USB HID
+                ConnectToCIasHid(); //Connecting to CI as USB HID
+                if (myDevice == null)
+                {
+                    DoLog("FAILED", 3, true, 12);
+                    return;
+                }
             }
             else
             {
@@ -128,10 +136,12 @@ namespace xComfortWingman
         }
 
 
-        public static Task ConnectToCIasHid()
+        public static void ConnectToCIasHid()
         {
             //Console.Write("Connecting to CI...");
-            DoLog("Connecting to CI...", false);
+            Stopwatch stopwatch = new Stopwatch();
+            DoLog("Connecting to CI device...", false);
+            stopwatch.Start();
             var list = DeviceList.Local;
             //list.Changed += (sender, e) => DoLog("Device list changed."); //We don't need to implement support for hotswap right now... 
             var allHidList = list.GetHidDevices().ToArray();
@@ -148,32 +158,33 @@ namespace xComfortWingman
             {
                 var reportDescriptor = myDevice.GetReportDescriptor();
 
-                if (myDevice.TryOpen(out HidStream hidStream))
+                if (myDevice.TryOpen(out myHidStream))//HidStream hidStream))
                 {
-                    DoLog("OK", 3, true, 10);
+                    DoLog("OK", 3, false, 10);
+                    DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                     DoLog("Listening for xComfort messages...");
-                    hidStream.ReadTimeout = Timeout.Infinite;
+                    myHidStream.ReadTimeout = Timeout.Infinite;
 
-                    using (hidStream)
+                    using (myHidStream)
                     {
                         var inputReportBuffer = new byte[myDevice.GetMaxInputReportLength()];
 
                         // -------------------- RAW -------------------------
                         IAsyncResult ar = null;
-
+                        readyToTransmit = true;
                         int startTime = Environment.TickCount;
                         while (true)
                         {
                             if (ar == null)
                             {
-                                ar = hidStream.BeginRead(inputReportBuffer, 0, inputReportBuffer.Length, null, null);
+                                ar = myHidStream.BeginRead(inputReportBuffer, 0, inputReportBuffer.Length, null, null);
                             }
 
                             if (ar != null)
                             {
                                 if (ar.IsCompleted)
                                 {
-                                    int byteCount = hidStream.EndRead(ar);
+                                    int byteCount = myHidStream.EndRead(ar);
                                     ar = null;
 
                                     if (byteCount > 0)
@@ -195,96 +206,15 @@ namespace xComfortWingman
                         // --------------------------------------------------
                     }
                 }
+                else
+                {
+                    DoLog("FAIL", 3, true, 14);
+                    DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                    //return false;
+                }
             }
-            return null;
+            //return false;
         }
-
- 
-
-//        public static async Task ConnectToHIDAsync()
-//        {
-//            DoLog("Connecting to Communication Interface (CI) using USB...");
-
-//#if LIBUSB
-//            LibUsbUsbDeviceFactory.Register();
-//#else
-//            WindowsUsbDeviceFactory.Register();
-//            WindowsHidDeviceFactory.Register();
-//#endif
-//            try
-//            {
-//                int VID = 0x188a;   // This is the Vendor ID that we are looking for.
-//                string desiredDeviceID = LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath; // We don't know this value at compile time.
-
-//                //LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath
-
-//                //LibUsbDotNet.Main.UsbDeviceFinder usbDeviceFinder = new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101);
-//                //LibUsbDotNet.UsbDevice usbDevice = LibUsbDotNet.UsbDevice.OpenUsbDevice(usbDeviceFinder);
-//                //DoLog($"Using device: {usbDevice.Info.ProductString} { usbDevice.DevicePath}");
-
-//                //foreach (LibUsbDotNet.Main.UsbRegistry reg in LibUsbDotNet.UsbDevice.AllDevices)
-//                //{
-//                //    if (reg.Vid == VID)
-//                //    {
-//                //        DoLog($"LibUsbDotNet: Found device {reg.Name} {reg.DevicePath}");
-//                //        desiredDeviceID = reg.DevicePath;
-//                //    }
-//                //}
-
-//#if false
-//                var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
-//                {
-//                    new FilterDeviceDefinition{ VendorId= Convert.ToUInt32(VID) } //, ProductId=0x1101}
-//                    //new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Usb, VendorId= 0x188a, ProductId=0x1101}
-//                };
-//                foreach (IDevice dev in await DeviceManager.Current.GetDevicesAsync(deviceDefinitions))
-//                {
-//                    if (dev == null) { DoLog("Skipping null-entry"); continue; }
-//                    DoLog($"LibUsbDevice: Checking desired ID up against {dev.DeviceId}...");
-//                    if (dev.DeviceId == desiredDeviceID)
-//                    {
-//                        myDevice = dev;
-//                    }
-//                }
-//#else
-//                DoLog($"We desire {desiredDeviceID}");
-
-//                DeviceManager deviceManager = DeviceManager.Current;
-//                DoLog(deviceManager.ToString());
-//                uint? PID = 0x1101;
-//                ushort? UP = 0;
-//                List<FilterDeviceDefinition> filterDeviceDefinitions = new List<FilterDeviceDefinition>
-//                {
-//                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Hid, ProductId = PID, UsagePage = UP },
-//                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Usb, ProductId = PID, UsagePage = UP }
-//                };
-//                foreach (IDevice dev in await deviceManager.GetDevicesAsync(filterDeviceDefinitions))
-//                {
-//                    if (dev.DeviceId == desiredDeviceID)
-//                    {
-//                        DoLog($"Found device: {dev.DeviceId}");
-//                        myDevice = dev;
-//                    }
-//                }
-                
-//#endif
-//                await myDevice.InitializeAsync();
-//                readyToTransmit = true;
-
-//                DoLog("Listening for incomming data...");
-//                bootComplete = true;
-//                do
-//                {
-//                    var readBuffer = await myDevice.ReadAsync();
-//                    if (readBuffer.Length > 0) { IncommingData(readBuffer); }
-//                } while (true);
-//            }
-//            catch (Exception ex)
-//            {
-//                DoLog(ex.Message,5);
-//                DoLog(ex.StackTrace);
-//            }
-//        }
 
         public static async void SendThenBlockTransmit(byte[] dataToSend)
         {
@@ -294,11 +224,12 @@ namespace xComfortWingman
             if (Settings.CONNECTION_MODE == CI_CONNECTION_MODE.RS232_MODE) { dataToSend = AddRS232Bytes(dataToSend); }
             if (dataToSend[0] != 0x00 && dataToSend[0] != Settings.RS232_STARTBYTE ) { dataToSend = AddZeroAsFirstByte(dataToSend); }
 
-            //Array.Resize(ref dataToSend, myDevice.ConnectedDeviceDefinition.WriteBufferSize.Value); //If we don't fill the buffer, it will repeat the data instead of using 0x00. That causes strangeness...
+            Array.Resize(ref dataToSend, myDevice.GetMaxOutputReportLength()); //ConnectedDeviceDefinition.WriteBufferSize.Value); //If we don't fill the buffer, it will repeat the data instead of using 0x00. That causes strangeness...
 
             DateTime start = DateTime.Now;
             //await myDevice.WriteAsync(dataToSend);
-            
+            await myHidStream.WriteAsync(dataToSend, 0, dataToSend.Length, CancellationToken.None);
+                       
             while (DateTime.Now.Subtract(start).TotalSeconds < 5)
             {
                 if (readyToTransmit) { return; } // No need to wait for timeout!
@@ -417,9 +348,10 @@ namespace xComfortWingman
             datapoints.Add(new Datapoint(Convert.ToInt32(line[0]), line[1], Convert.ToInt32(line[2]), Convert.ToInt32(line[3]), Convert.ToInt32(line[4]), Convert.ToInt32(line[5]), Convert.ToInt32(line[6]), line[7]));
         }
 
-        static async void IncommingData(byte[] dataFromCI) //We've got data from the CI
+        public static async void IncommingData(byte[] dataFromCI) //We've got data from the CI
         {
             if (dataFromCI[0] == 0) { dataFromCI = RemoveFirstByte(dataFromCI); } // CKOZ-00/14 triggers this, but CKOZ-00/03 doesn't...
+            Console.WriteLine();
             PrintByte(dataFromCI, "Incomming data");
             /*
             Example of an acknowledgement message (OK_MRF):
@@ -436,9 +368,9 @@ namespace xComfortWingman
 
             if (Settings.RAW_ENABLED)
             {
-                DoLog("Sending RAW data via MQTT...", 1, false);
+                DoLog("Sending RAW data via MQTT...",2);
                 await mqtt.SendMQTTMessageAsync("BachelorPad/xComfort/RAW", FormatByteForPrint(dataFromCI, true));
-                DoLog("OK", 1, true, 10);
+                //DoLog("OK", 1, true, 10);
             }
 
             byte MGW_TYPE = dataFromCI[1];
@@ -549,7 +481,8 @@ namespace xComfortWingman
             if (sequenceCounter > 15) { sequenceCounter = 0; } // Reset to 0 in order to keep the size to 4 bits.
 
             //Send the data
-            PrintByte(myCommand, "\nOutgoing data");
+            Console.WriteLine();
+            PrintByte(myCommand, "Outgoing data");
             SendThenBlockTransmit(myCommand);
         }
 

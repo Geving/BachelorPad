@@ -9,59 +9,57 @@ namespace xComfortWingman
 
         public static void DoLog(String text, int level, bool newline)
         {
-            ConsoleColor fc = Console.ForegroundColor;
-            ConsoleColor bc = Console.BackgroundColor;
-            String n = "";
-            if (newline) { n = "\n"; }
-            switch (level)
+            if (level > 2 || Program.Settings.DEBUGMODE)
             {
-                case 5: // Max
-                    {
-                        Console.BackgroundColor = ConsoleColor.Red;
-                        Console.ForegroundColor = ConsoleColor.White;
-                        Console.Write(text + n);
-                        break;
-                    }
-                case 4: // High
-                    {
-                        Console.ForegroundColor = ConsoleColor.White;
-                        Console.Write(text + n);
-                        break;
-                    }
-                case 3: // Default
-                default:
-                    {
-                        Console.Write(text + n);
-                        break;
-                    }
-                case 2: // Low
-                    {
-                        Console.ForegroundColor = ConsoleColor.DarkYellow;
-                        Console.Write(text + n);
-                        break;
-                    }
-                case 1: // Debug
-                    {
-                        if (Program.Settings.DEBUGMODE)
+                //ConsoleColor fc = Console.ForegroundColor;
+                //ConsoleColor bc = Console.BackgroundColor;
+                String date = ($"{DateTime.Now.Year}-{DateTime.Now.Month.ToString("00")}-{DateTime.Now.Day.ToString("00")} {DateTime.Now.Hour.ToString("00")}:{DateTime.Now.Minute.ToString("00")}:{DateTime.Now.Second.ToString("00")}.{DateTime.Now.Millisecond.ToString("000")} - ");
+                String n = "";
+                if (newline) { n = "\n"; }
+                //text = date + text + n;
+                switch (level)
+                {
+                    case 5: // Max
                         {
-                            Console.ForegroundColor = ConsoleColor.DarkYellow;
-                            Console.Write(text + n);
+                            Console.BackgroundColor = ConsoleColor.Red;
+                            Console.ForegroundColor = ConsoleColor.White;
+                            break;
                         }
-                        break;
-                    }
-                case 0:
-                    {
-                        if (Program.Settings.DEBUGMODE)
+                    case 4: // High
                         {
-                            Console.BackgroundColor = ConsoleColor.DarkYellow;
-                            Console.ForegroundColor = ConsoleColor.Black;
-                            Console.Write(text + n);
+                            Console.ForegroundColor = ConsoleColor.White;
+                            break;
                         }
-                        break;
-                    }
+                    case 3: // Default
+                    default:
+                        {
+                            Console.ResetColor();
+                            break;
+                        }
+                    case 2: // Low
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            break;
+                        }
+                    case 1: // Debug
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            break;
+                        }
+                    case 0:
+                        {
+                            Console.ForegroundColor = ConsoleColor.DarkMagenta;
+                            //Console.BackgroundColor = ConsoleColor.DarkMagenta;
+                            //Console.ForegroundColor = ConsoleColor.White;
+                            break;
+                        }
+                }
+                Console.Write(date + text + n);
+
+                //Console.ForegroundColor = fc;
+                //Console.BackgroundColor = bc;
+                Console.ResetColor();
             }
-            Console.ForegroundColor = fc;
-            Console.BackgroundColor = bc;
         }
 
         public static void DoLog(String text)
@@ -76,7 +74,7 @@ namespace xComfortWingman
 
         public static void DoLog(String text, int level)
         {
-            DoLog(text, 3, true);
+            DoLog(text, level, true);
         }
 
         public static void DoLog(String text, int level, bool newline, int color)
