@@ -1,4 +1,6 @@
-﻿using System;
+﻿//#define LIBUSB
+
+using System;
 using System.Collections.Generic;
 using xComfortWingman.Protocol;
 using static xComfortWingman.Protocol.PT_RX.MGW_RX_MSG_TYPE;
@@ -30,8 +32,12 @@ namespace xComfortWingman
         static bool bootComplete = false;
 
         public static IMqttClient mqttClient;
+#if LIBUSB
         public static IDevice myDevice;
-
+        //public static LibUsbDotNet.UsbDevice myDevice;
+#else
+        public static IDevice myDevice;
+#endif
         public static List<Datapoint> datapoints;
         public static List<DeviceType> devicetypes;
         public static List<byte> receivedData = new List<byte>();
@@ -47,6 +53,7 @@ namespace xComfortWingman
             DeviceTypeList dtl = new DeviceTypeList();
             devicetypes = dtl.ListDeviceTypes();
 
+            Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("Hi, I'm your xComfort Wingman!");
             Console.WriteLine("I'm here to talk to xComfort for you.");
             Console.WriteLine();
@@ -66,24 +73,35 @@ namespace xComfortWingman
             Console.WriteLine("\t* [RAW]\n\t  [This feature can be enabled or disabled in the settings.]");
             Console.WriteLine("\t  [The data is formatted as a human readable string of HEX values with space between each value.]");
             Console.WriteLine("\t  [Example: 06 1B 01 0A 01 00");
+            Console.ForegroundColor = ConsoleColor.Gray;
+            //Console.WriteLine("Current timeout value: " + Settings.RMF_TIMEOUT);
 
-            Console.WriteLine("Current timeout value: " + Settings.RMF_TIMEOUT);
+            ConnectToHIDAsync(); //Connecting to CI via USB
+            //DoAllTheStuff();
+   
+            while (true){
+                //Do nothing...
+            }
+        }
 
+        public async static void DoAllTheStuff()
+        {
             //ImportDatapoints();
             ImportDatapointsFromFile("Datenpunkte.txt");
 
             //Communications
-            RunMQTTClientAsync(); //Connecting to MQTT
+            await RunMQTTClientAsync(); //Connecting to MQTT
             if (Settings.CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE)
             {
-                ConnectToHIDAsync(); //Connecting to CI via USB
+                await ConnectToHIDAsync(); //Connecting to CI via USB
             }
             else
             {
                 openSerialport(); //Connecting to CI via RS232
             }
-            
+            Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Startup complete!");
+            Console.ForegroundColor = ConsoleColor.Gray;
 
             if (Settings.DEBUGMODE)
             {
@@ -104,10 +122,6 @@ namespace xComfortWingman
                 SendDataToDP(5, 50);
                 Console.ReadLine();
                 SendDataToDP(5, 0);
-            }
-   
-            while (true){
-                //Do nothing...
             }
         }
 
@@ -170,7 +184,7 @@ namespace xComfortWingman
                 }
 
 
-                mqttClient.ApplicationMessageReceived += (s, e) =>
+                mqttClient.ApplicationMessageReceived += async (s, e) =>
                 {
                     string[] topics = e.ApplicationMessage.Topic.Split("/");
                     int basePathLevels = Settings.MQTT_BASEPATH.Split("/").Length;
@@ -223,13 +237,13 @@ namespace xComfortWingman
                                     case "loadsettings":
                                     case "getsettings":
                                         {
-                                            SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.GetSettingsAsJSON());
+                                            await SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.GetSettingsAsJSON());
                                             break;
                                         }
                                     case "savesettings":
                                     case "setsettings":
                                         {
-                                            SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
+                                            await SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
                                             break;
                                         }
                                     default:
@@ -251,7 +265,7 @@ namespace xComfortWingman
 
                 mqttClient.Connected += async (s, e) =>
                 {
-                    Console.WriteLine("### CONNECTED WITH SERVER ###");
+                    Console.WriteLine("Connected to MQTT server!");
 
                     // Subscribe to a topic
                     await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/cmd/#").Build());
@@ -276,7 +290,7 @@ namespace xComfortWingman
                     }
                     catch
                     {
-                        Console.WriteLine("### RECONNECTING FAILED ###");
+                        Console.WriteLine("Failed to reconnect to MQTT server!");
                     }
                 };
 
@@ -286,7 +300,7 @@ namespace xComfortWingman
                 }
                 catch (Exception exception)
                 {
-                    Console.WriteLine("### CONNECTING FAILED ###" + Environment.NewLine + exception);
+                    Console.WriteLine("Connection failed!" + Environment.NewLine + exception);
                 }
                 Console.WriteLine("Done connecting to MQTT server...");
             }
@@ -296,41 +310,191 @@ namespace xComfortWingman
             }
         }
 
+        //private static IDevice GetDevice(int VID)
+        //{
+        //    IDevice device = null;
+        //    var deviceDefinitionsAll = new List<FilterDeviceDefinition> { new FilterDeviceDefinition { DeviceType = Device.Net.DeviceType.Hid }, new FilterDeviceDefinition { DeviceType = Device.Net.DeviceType.Usb } };
+
+        //    var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
+        //    {
+        //        new FilterDeviceDefinition{ VendorId= Convert.ToUInt32(VID) } //, ProductId=0x1101}
+        //        //new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Usb, VendorId= 0x188a, ProductId=0x1101}
+        //    };
+        //    try
+        //    {
+        //        int x = 0;
+        //        foreach (LibUsbDotNet.Main.UsbRegistry reg in LibUsbDotNet.UsbDevice.AllDevices)
+        //        {
+        //            Console.WriteLine($"LibUsbDotNet: Processing device {reg.Name} {reg.DevicePath}");
+        //            if (reg.Vid == VID)
+        //            {
+        //                Console.WriteLine($"Step {x++}");
+        //                ConnectedDeviceDefinition connectedDeviceDefinition = new ConnectedDeviceDefinition(reg.DevicePath);
+        //                Console.WriteLine($"Step {x++}");
+        //                DeviceManager deviceManager = DeviceManager.Current;
+        //                Console.WriteLine($"Step {x++}");
+        //                Console.WriteLine(deviceManager.ToString());
+        //                Console.WriteLine($"Step {x++} -----------");
+
+        //                List<IDevice> devices = deviceManager.GetDevicesAsync(deviceDefinitionsAll);
+        //                Console.WriteLine($"Step {x++}");
+
+        //                Console.WriteLine(devices.Count);
+        //                Console.WriteLine($"Step {x++}");
+
+        //                foreach (IDevice dev in devices)
+        //                {
+        //                    Console.WriteLine($"xStep {x++}");
+        //                    Console.WriteLine(dev.DeviceId);
+        //                    if (dev.DeviceId == reg.DevicePath)
+        //                    {
+        //                        Console.WriteLine($"FOUND IT!");
+        //                        device = dev;
+        //                    }
+        //                }
+        //                Console.WriteLine($"Step {x++}");
+        //                //Console.WriteLine($"Step {x++}");
+        //                //Console.WriteLine(DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(reg.DevicePath)).DeviceId);
+        //                //Console.WriteLine($"Step {x++}");
+        //                //IDevice device = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(reg.DevicePath));
+        //                //Console.WriteLine($"Step {x++}");
+        //                //myDevice = DeviceManager.Current.GetDevice(connectedDeviceDefinition);
+        //                //Console.WriteLine($"Step {x++}");
+        //            }
+        //            Console.WriteLine($"yStep {x++}");
+        //        }
+        //        Console.WriteLine($"zStep {x++}");
+        //        //var anIDevice = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(myDevice.DevicePath));
+
+
+        //        //var allUSBdevices = await DeviceManager.Current.GetDevicesAsync(deviceDefinitionsAll);
+
+        //        //Get the first available device and connect to it
+        //        //var devices = await DeviceManager.Current.GetDevicesAsync(deviceDefinitions);
+        //        //myDevice = devices.FirstOrDefault();
+        //        //if (devices.Count==0 || myDevice == null)
+        //        //LibUsbDevice myLibDevice = 
+        //        //myDevice = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition("usbdevice1.6"));
+        //        //foreach (IDevice dev in allUSBdevices)
+        //        //{
+        //        //    Console.WriteLine($"Checking USB device {dev.DeviceId}...");
+
+        //        //    var newIDevice = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(dev.DeviceId));
+        //        //    //LibUsbDotNet.IUsbDevice libDev = 
+
+
+
+
+        //        //    //if (dev. == 0x188a)
+        //        //    //{
+        //        //    //    Console.WriteLine($"{dev.DevicePath} is a match!");
+        //        //    //    myDevice = new LibUsbDevice(dev.UsbRegistryInfo.Device, 2000);
+        //        //    //}
+        //        //};
+        //        if (device == null)
+        //        {
+        //            Console.ForegroundColor = ConsoleColor.Red;
+        //            Console.WriteLine("Unable to find the CI!");
+        //            Console.WriteLine("Are you sure it's supposed to be a USB device and not connected via RS232?");
+        //            Console.WriteLine("There is no reason to continue, I'm going to self-terminate now...");
+        //            Console.ForegroundColor = ConsoleColor.Gray;
+        //            Environment.Exit(0);
+        //            return null;
+        //        }
+        //        else
+        //        {
+        //            Console.WriteLine($"Using device {device.DeviceId}...");
+        //            return device;
+        //        }
+        //    } catch (Exception exception)
+        //    {
+        //        Console.WriteLine(exception.Message);
+        //    }
+        //    return null;
+        //}
+
         public static async Task ConnectToHIDAsync()
         {
-            
-#if (true)
+            Console.WriteLine("Connecting to Communication Interface (CI) using USB...");
+
+#if LIBUSB
             LibUsbUsbDeviceFactory.Register();
 #else
             WindowsUsbDeviceFactory.Register();
             WindowsHidDeviceFactory.Register();
-#endif    
-
-            var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
-            {
-                new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Hid, VendorId= 0x188a, ProductId=0x1101}
-                //new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Usb, VendorId= 0x188a, ProductId=0x1101}
-            };
+#endif
             try
             {
-                //Get the first available device and connect to it
-                var devices = await DeviceManager.Current.GetDevicesAsync(deviceDefinitions);
-                myDevice = devices.FirstOrDefault();
+                int VID = 0x188a;   // This is the Vendor ID that we are looking for.
+                string desiredDeviceID = LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath; // We don't know this value at compile time.
+
+                //LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath
+
+                //LibUsbDotNet.Main.UsbDeviceFinder usbDeviceFinder = new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101);
+                //LibUsbDotNet.UsbDevice usbDevice = LibUsbDotNet.UsbDevice.OpenUsbDevice(usbDeviceFinder);
+                //Console.WriteLine($"Using device: {usbDevice.Info.ProductString} { usbDevice.DevicePath}");
+
+                //foreach (LibUsbDotNet.Main.UsbRegistry reg in LibUsbDotNet.UsbDevice.AllDevices)
+                //{
+                //    if (reg.Vid == VID)
+                //    {
+                //        Console.WriteLine($"LibUsbDotNet: Found device {reg.Name} {reg.DevicePath}");
+                //        desiredDeviceID = reg.DevicePath;
+                //    }
+                //}
+
+#if false
+                var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
+                {
+                    new FilterDeviceDefinition{ VendorId= Convert.ToUInt32(VID) } //, ProductId=0x1101}
+                    //new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Usb, VendorId= 0x188a, ProductId=0x1101}
+                };
+                foreach (IDevice dev in await DeviceManager.Current.GetDevicesAsync(deviceDefinitions))
+                {
+                    if (dev == null) { Console.WriteLine("Skipping null-entry"); continue; }
+                    Console.WriteLine($"LibUsbDevice: Checking desired ID up against {dev.DeviceId}...");
+                    if (dev.DeviceId == desiredDeviceID)
+                    {
+                        myDevice = dev;
+                    }
+                }
+#else
+                Console.WriteLine($"We desire {desiredDeviceID}");
+
+                DeviceManager deviceManager = DeviceManager.Current;
+                Console.WriteLine(deviceManager.ToString());
+                uint? PID = 0x1101;
+                ushort? UP = 0;
+                List<FilterDeviceDefinition> filterDeviceDefinitions = new List<FilterDeviceDefinition>
+                {
+                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Hid, ProductId = PID, UsagePage = UP },
+                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Usb, ProductId = PID, UsagePage = UP }
+                };
+                foreach (IDevice dev in await deviceManager.GetDevicesAsync(filterDeviceDefinitions))
+                {
+                    if (dev.DeviceId == desiredDeviceID)
+                    {
+                        Console.WriteLine($"Found device: {dev.DeviceId}");
+                        myDevice = dev;
+                    }
+                }
+                
+#endif
                 await myDevice.InitializeAsync();
                 readyToTransmit = true;
-             
+
                 Console.WriteLine("Listening for incomming data...");
                 bootComplete = true;
                 do
                 {
                     var readBuffer = await myDevice.ReadAsync();
-                    IncommingData(readBuffer);
+                    if (readBuffer.Length > 0) { IncommingData(readBuffer); }
                 } while (true);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -447,7 +611,11 @@ namespace xComfortWingman
                Delimiter is tab
                The 
              */
-
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine("Datapoint file not found!");
+                return;
+            }
             string aline;
             FileStream fileStream = new FileStream(filePath, FileMode.Open);
             using (StreamReader reader = new StreamReader(fileStream))
@@ -1042,7 +1210,7 @@ namespace xComfortWingman
 
                 double[] doubleArrayData = new double[2];
                 double doubleData = 0;
-                string stringData = "";
+                //string stringData = "";
 
 
                 if (assignPacket)
@@ -1371,7 +1539,7 @@ namespace xComfortWingman
             HandleRX(rxPacket, true);
         }
 
-        #region "Helpers"
+#region "Helpers"
 
         static int CInt(String strToConvert) // VB.NET syntax, nast habit to get rid of...
         {
@@ -1653,6 +1821,6 @@ namespace xComfortWingman
             }
         }
 
-        #endregion
+#endregion
     }
 }
