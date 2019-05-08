@@ -48,8 +48,7 @@ namespace xComfortWingman
         public bool Equals(Datapoint other)
         {
             if (other == null) return false;
-            Datapoint objAsDP = other as Datapoint;
-            if (objAsDP == null) return false;
+            if (!(other is Datapoint objAsDP)) return false;
             else return Equals(objAsDP);
         }
 

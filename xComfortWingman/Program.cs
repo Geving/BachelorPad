@@ -10,33 +10,37 @@ using System.IO;
 
 using System.IO.Ports;
 using System.Threading.Tasks;
-using Device.Net;
+//using Device.Net;
 using System.Diagnostics;
 using Hid.Net.Windows;
-using MQTTnet;
-using MQTTnet.Client;
+
 using System.Text;
 using MQTTnet.Protocol;
 using System.Linq;
 using Usb.Net.Windows;
 using Device.Net.LibUsb;
+using HidSharp;
+using System.Threading;
+using HidSharp.Reports;
+
+using static xComfortWingman.Logger;
 
 namespace xComfortWingman
 {
     class Program
     {
-        private static DebugLogger Logger = new DebugLogger();
-        private static readonly Settings Settings = new Settings(true);
+        private static readonly MQTT mqtt = new MQTT();
+        public static readonly Settings Settings = new Settings(true);
 
-        static bool readyToTransmit = false;
-        static bool bootComplete = false;
+        private static bool readyToTransmit = false;
+        private static bool bootComplete = false;
 
-        public static IMqttClient mqttClient;
+        
 #if LIBUSB
         public static IDevice myDevice;
         //public static LibUsbDotNet.UsbDevice myDevice;
 #else
-        public static IDevice myDevice;
+        public static HidDevice myDevice;
 #endif
         public static List<Datapoint> datapoints;
         public static List<DeviceType> devicetypes;
@@ -48,36 +52,34 @@ namespace xComfortWingman
 
         static void Main(string[] args)
         {
-            Logger.Log("Test logger","Region?",null,LogLevel.Information);
             datapoints = new List<Datapoint>();
             DeviceTypeList dtl = new DeviceTypeList();
             devicetypes = dtl.ListDeviceTypes();
 
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine("Hi, I'm your xComfort Wingman!");
-            Console.WriteLine("I'm here to talk to xComfort for you.");
-            Console.WriteLine();
-            Console.WriteLine("You talk to me using MQTT, and I'll talk to xComfort by using a Communication Interface (CKOZ-00/03 or CKOZ-00/14)");
-            Console.WriteLine("The default topic beginning is 'BacheclorPad/xComfort/', and can be changed in the settings.");
-            Console.WriteLine();
-            Console.WriteLine("Topics I subscribe to:           \t Topic is used for:");
-            Console.WriteLine("\t  BacheclorPad/xComfort/cmd/X/ \t\t Listening for instructions for datapoint X (X is a number)");
-            Console.WriteLine("\t  BacheclorPad/xComfort/get/X/ \t\t Requesting an updated status from datapoint X (X is a number)");
-            Console.WriteLine("\t* BacheclorPad/xComfort/RAW/in/\t\t Sends the payload as RAW data directly to the interface."); 
-            Console.WriteLine();
-            Console.WriteLine("Topics I publish to:             \t I publish when:");
-            Console.WriteLine("\t  BacheclorPad/xComfort/+/set/ \t\t When a device broadcasts data without receiving an instruction first.");
-            Console.WriteLine("\t  BacheclorPad/xComfort/+/ack/ \t\t When confirmation of a completed instruction is received.");
-            Console.WriteLine("\t* BacheclorPad/xComfort/RAW/   \t\t Reports all RAW data from the interface as it arrives.");
-            Console.WriteLine();
-            Console.WriteLine("\t* [RAW]\n\t  [This feature can be enabled or disabled in the settings.]");
-            Console.WriteLine("\t  [The data is formatted as a human readable string of HEX values with space between each value.]");
-            Console.WriteLine("\t  [Example: 06 1B 01 0A 01 00");
+            DoLog("Hi, I'm your xComfort Wingman!");
+            //DoLog("I'm here to talk to xComfort for you.");
+            //DoLog();
+            //DoLog("You talk to me using MQTT, and I'll talk to xComfort by using a Communication Interface (CKOZ-00/03 or CKOZ-00/14)");
+            //DoLog("The default topic beginning is 'BacheclorPad/xComfort/', and can be changed in the settings.");
+            //DoLog();
+            //DoLog("Topics I subscribe to:           \t Topic is used for:");
+            //DoLog("\t  BacheclorPad/xComfort/cmd/X/ \t\t Listening for instructions for datapoint X (X is a number)");
+            //DoLog("\t  BacheclorPad/xComfort/get/X/ \t\t Requesting an updated status from datapoint X (X is a number)");
+            //DoLog("\t* BacheclorPad/xComfort/RAW/in/\t\t Sends the payload as RAW data directly to the interface."); 
+            //DoLog();
+            //DoLog("Topics I publish to:             \t I publish when:");
+            //DoLog("\t  BacheclorPad/xComfort/+/set/ \t\t When a device broadcasts data without receiving an instruction first.");
+            //DoLog("\t  BacheclorPad/xComfort/+/ack/ \t\t When confirmation of a completed instruction is received.");
+            //DoLog("\t* BacheclorPad/xComfort/RAW/   \t\t Reports all RAW data from the interface as it arrives.");
+            //DoLog();
+            //DoLog("\t* [RAW]\n\t  [This feature can be enabled or disabled in the settings.]");
+            //DoLog("\t  [The data is formatted as a human readable string of HEX values with space between each value.]");
+            //DoLog("\t  [Example: 06 1B 01 0A 01 00");
             Console.ForegroundColor = ConsoleColor.Gray;
-            //Console.WriteLine("Current timeout value: " + Settings.RMF_TIMEOUT);
+            //DoLog("Current timeout value: " + Settings.RMF_TIMEOUT);
 
-            ConnectToHIDAsync(); //Connecting to CI via USB
-            //DoAllTheStuff();
+            DoAllTheStuff();
    
             while (true){
                 //Do nothing...
@@ -90,17 +92,17 @@ namespace xComfortWingman
             ImportDatapointsFromFile("Datenpunkte.txt");
 
             //Communications
-            await RunMQTTClientAsync(); //Connecting to MQTT
+            await mqtt.RunMQTTClientAsync(); //Connecting to MQTT
             if (Settings.CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE)
             {
-                await ConnectToHIDAsync(); //Connecting to CI via USB
+                await ConnectToCIasHid(); //Connecting to CI as USB HID
             }
             else
             {
-                openSerialport(); //Connecting to CI via RS232
+                OpenSerialport(); //Connecting to CI via RS232
             }
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("Startup complete!");
+            DoLog("Startup complete!");
             Console.ForegroundColor = ConsoleColor.Gray;
 
             if (Settings.DEBUGMODE)
@@ -113,7 +115,7 @@ namespace xComfortWingman
                 {
                     //Do nothing but wait...
                 }
-                Console.WriteLine("Press Enter to do some diagnostics!");
+                DoLog("Press Enter to do some diagnostics!",0);
                 Console.ReadLine();
                 SendDataToDP(5, 30);
                 Console.ReadLine();
@@ -125,378 +127,164 @@ namespace xComfortWingman
             }
         }
 
-  
-        public static async Task RunMQTTClientAsync()
+
+        public static Task ConnectToCIasHid()
         {
-            try
+            //Console.Write("Connecting to CI...");
+            DoLog("Connecting to CI...", false);
+            var list = DeviceList.Local;
+            //list.Changed += (sender, e) => DoLog("Device list changed."); //We don't need to implement support for hotswap right now... 
+            var allHidList = list.GetHidDevices().ToArray();
+            foreach (HidSharp.HidDevice dev in allHidList)
             {
-                // Create a new MQTT client.
-                var factory = new MqttFactory();
-                mqttClient = factory.CreateMqttClient();
-
-                var ClientID = Settings.MQTT_CLIENT_ID.Replace("%rnd%", new Guid().ToString());
-
-                var Credentials = new MqttClientCredentials
+                if (dev.VendorID == 0x188A && dev.ProductID == 0x1101)
                 {
-                    Username = Settings.MQTT_CRED_USERNAME,
-                    Password = Settings.MQTT_CRED_PASSWORD
-                };
-
-                var TlsOptions = new MqttClientTlsOptions
-                {
-                    UseTls = Settings.MQTT_USE_TLS
-                };
-
-                var ChannelOptions_WebSocket = new MqttClientWebSocketOptions
-                {
-                    Uri = Settings.MQTT_SERVER_WEBSOCKET,
-                    TlsOptions = TlsOptions
-                };
-
-                var ChannelOptions_TCP = new MqttClientTcpOptions
-                {
-                    Server = Settings.MQTT_SERVER_TCP,
-                    TlsOptions = TlsOptions
-                };
-                
-                var clientOptions = new MqttClientOptions();
-
-                if (Settings.MQTT_CONNECTION_MODE == MQTT_CONNECTION_MODE.TCP)
-                {
-                    clientOptions = new MqttClientOptions
-                    {
-                        CleanSession = Settings.MQTT_CLEAN_SESSION,
-                        ClientId = ClientID,
-                        Credentials = Credentials,
-                        ChannelOptions = ChannelOptions_TCP
-                    };
+                    //We have found the CI!
+                    myDevice = dev;
+                    break;
                 }
-                else
-                {
-                    clientOptions = new MqttClientOptions
-                    {
-                        CleanSession = Settings.MQTT_CLEAN_SESSION,
-                        ClientId = ClientID,
-                        Credentials = Credentials,
-                        ChannelOptions = ChannelOptions_WebSocket
-                    };
-
-                }
-
-
-                mqttClient.ApplicationMessageReceived += async (s, e) =>
-                {
-                    string[] topics = e.ApplicationMessage.Topic.Split("/");
-                    int basePathLevels = Settings.MQTT_BASEPATH.Split("/").Length;
-                    if (topics.Length < basePathLevels+1)
-                    {
-                        Console.WriteLine("Invalid topic path!");
-                        return;
-                    }
-                    switch (topics[basePathLevels])
-                    {
-                        case "cmd":
-                            {
-                                try
-                                {
-                                    SendDataToDP(Convert.ToInt32(topics[basePathLevels + 1]), Convert.ToInt32(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)));
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine(ex.Message);
-                                }
-
-                                break;
-                            }
-                        case "get":
-                            {
-                                break;
-                            }
-                        case "RAW":
-                            {
-                                //Because we only subscribe to RAW/in, we don't need to check topics[3]. It MUST be "in" to trigger this code.
-
-                                // The HEX data comes as plain text, which is right now stored as a byte array.
-                                string payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload).Replace(" ", ""); //Get the text from the payload and remove the spaces
-                                int NumberChars = payload.Length;
-                                byte[] payloadAsBytes = new byte[(NumberChars / 2)];
-                                for (int i = 0; i < NumberChars; i += 2) //Go through the payload two bytes pr step
-                                {
-                                    payloadAsBytes[i / 2] = Convert.ToByte(payload.Substring(i, 2), 16); //Convert "two bytes of text" into one byte of "data"
-                                }
-                                //if (payloadAsBytes[0] != 0x00) { payloadAsBytes = AddZeroAsFirstByte(payloadAsBytes); }
-                                //if (Settings.CONNECTION_MODE==CI_CONNECTION_MODE.RS232_MODE) { payloadAsBytes = AddRS232Bytes(payloadAsBytes); }
-                                PrintByte(payloadAsBytes, "Sending RAW data");
-                                SendThenBlockTransmit(payloadAsBytes); //Send this to the interface for immediate transmit
-                                break;
-                            }
-                        case "config":
-                            {
-                                switch(topics[basePathLevels + 1])
-                                {
-                                    case "loadsettings":
-                                    case "getsettings":
-                                        {
-                                            await SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.GetSettingsAsJSON());
-                                            break;
-                                        }
-                                    case "savesettings":
-                                    case "setsettings":
-                                        {
-                                            await SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
-                                            break;
-                                        }
-                                    default:
-                                        {
-                                            Console.WriteLine($"Unknown config request: {topics[basePathLevels + 1]}");
-                                            break;
-                                        }
-                                }
-                                break;
-                            }
-                        default:
-                            {
-                                Console.WriteLine("Unknown topic: " + topics[2]);
-                                break;
-                            }
-                    }
-                };
-
-
-                mqttClient.Connected += async (s, e) =>
-                {
-                    Console.WriteLine("Connected to MQTT server!");
-
-                    // Subscribe to a topic
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/cmd/#").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/in").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/getsettings").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/setsettings").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/loadsettings").Build());
-                    await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/savesettings").Build());
-                    //await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/out").Build()); // We don't need to subscribe to our own outbound messages...
-                    //Console.WriteLine("### SUBSCRIBED ###");
-                };
-
-                mqttClient.Disconnected += async (s, e) =>
-                {
-                    //Console.WriteLine("### DISCONNECTED FROM SERVER ###");
-                    await Task.Delay(TimeSpan.FromSeconds(5));
-
-                    try
-                    {
-                        await mqttClient.ConnectAsync(clientOptions);
-                    }
-                    catch
-                    {
-                        Console.WriteLine("Failed to reconnect to MQTT server!");
-                    }
-                };
-
-                try
-                {
-                    await mqttClient.ConnectAsync(clientOptions);
-                }
-                catch (Exception exception)
-                {
-                    Console.WriteLine("Connection failed!" + Environment.NewLine + exception);
-                }
-                Console.WriteLine("Done connecting to MQTT server...");
             }
-            catch (Exception ex)
+            if (myDevice != null)
             {
-                Console.WriteLine(ex.Message);
+                var reportDescriptor = myDevice.GetReportDescriptor();
+
+                if (myDevice.TryOpen(out HidStream hidStream))
+                {
+                    DoLog("OK", 3, true, 10);
+                    DoLog("Listening for xComfort messages...");
+                    hidStream.ReadTimeout = Timeout.Infinite;
+
+                    using (hidStream)
+                    {
+                        var inputReportBuffer = new byte[myDevice.GetMaxInputReportLength()];
+
+                        // -------------------- RAW -------------------------
+                        IAsyncResult ar = null;
+
+                        int startTime = Environment.TickCount;
+                        while (true)
+                        {
+                            if (ar == null)
+                            {
+                                ar = hidStream.BeginRead(inputReportBuffer, 0, inputReportBuffer.Length, null, null);
+                            }
+
+                            if (ar != null)
+                            {
+                                if (ar.IsCompleted)
+                                {
+                                    int byteCount = hidStream.EndRead(ar);
+                                    ar = null;
+
+                                    if (byteCount > 0)
+                                    {
+                                        //string hexOfBytes = string.Join(" ", inputReportBuffer.Take(byteCount).Select(b => b.ToString("X2")));
+                                        //DoLog("  {0}", hexOfBytes);
+                                        //PrintByte(inputReportBuffer, "Received data from CI");
+                                        IncommingData(inputReportBuffer);
+                                    }
+                                }
+                                else
+                                {
+                                    ar.AsyncWaitHandle.WaitOne(500);
+                                }
+                            }
+                            uint elapsedTime = (uint)(Environment.TickCount - startTime);
+                            //if (elapsedTime >= 20000) { break; } // Stay open for 20 seconds.
+                        }
+                        // --------------------------------------------------
+                    }
+                }
             }
+            return null;
         }
 
-        //private static IDevice GetDevice(int VID)
-        //{
-        //    IDevice device = null;
-        //    var deviceDefinitionsAll = new List<FilterDeviceDefinition> { new FilterDeviceDefinition { DeviceType = Device.Net.DeviceType.Hid }, new FilterDeviceDefinition { DeviceType = Device.Net.DeviceType.Usb } };
+ 
 
-        //    var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
-        //    {
-        //        new FilterDeviceDefinition{ VendorId= Convert.ToUInt32(VID) } //, ProductId=0x1101}
-        //        //new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Usb, VendorId= 0x188a, ProductId=0x1101}
-        //    };
-        //    try
-        //    {
-        //        int x = 0;
-        //        foreach (LibUsbDotNet.Main.UsbRegistry reg in LibUsbDotNet.UsbDevice.AllDevices)
-        //        {
-        //            Console.WriteLine($"LibUsbDotNet: Processing device {reg.Name} {reg.DevicePath}");
-        //            if (reg.Vid == VID)
-        //            {
-        //                Console.WriteLine($"Step {x++}");
-        //                ConnectedDeviceDefinition connectedDeviceDefinition = new ConnectedDeviceDefinition(reg.DevicePath);
-        //                Console.WriteLine($"Step {x++}");
-        //                DeviceManager deviceManager = DeviceManager.Current;
-        //                Console.WriteLine($"Step {x++}");
-        //                Console.WriteLine(deviceManager.ToString());
-        //                Console.WriteLine($"Step {x++} -----------");
+//        public static async Task ConnectToHIDAsync()
+//        {
+//            DoLog("Connecting to Communication Interface (CI) using USB...");
 
-        //                List<IDevice> devices = deviceManager.GetDevicesAsync(deviceDefinitionsAll);
-        //                Console.WriteLine($"Step {x++}");
+//#if LIBUSB
+//            LibUsbUsbDeviceFactory.Register();
+//#else
+//            WindowsUsbDeviceFactory.Register();
+//            WindowsHidDeviceFactory.Register();
+//#endif
+//            try
+//            {
+//                int VID = 0x188a;   // This is the Vendor ID that we are looking for.
+//                string desiredDeviceID = LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath; // We don't know this value at compile time.
 
-        //                Console.WriteLine(devices.Count);
-        //                Console.WriteLine($"Step {x++}");
+//                //LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath
 
-        //                foreach (IDevice dev in devices)
-        //                {
-        //                    Console.WriteLine($"xStep {x++}");
-        //                    Console.WriteLine(dev.DeviceId);
-        //                    if (dev.DeviceId == reg.DevicePath)
-        //                    {
-        //                        Console.WriteLine($"FOUND IT!");
-        //                        device = dev;
-        //                    }
-        //                }
-        //                Console.WriteLine($"Step {x++}");
-        //                //Console.WriteLine($"Step {x++}");
-        //                //Console.WriteLine(DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(reg.DevicePath)).DeviceId);
-        //                //Console.WriteLine($"Step {x++}");
-        //                //IDevice device = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(reg.DevicePath));
-        //                //Console.WriteLine($"Step {x++}");
-        //                //myDevice = DeviceManager.Current.GetDevice(connectedDeviceDefinition);
-        //                //Console.WriteLine($"Step {x++}");
-        //            }
-        //            Console.WriteLine($"yStep {x++}");
-        //        }
-        //        Console.WriteLine($"zStep {x++}");
-        //        //var anIDevice = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(myDevice.DevicePath));
+//                //LibUsbDotNet.Main.UsbDeviceFinder usbDeviceFinder = new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101);
+//                //LibUsbDotNet.UsbDevice usbDevice = LibUsbDotNet.UsbDevice.OpenUsbDevice(usbDeviceFinder);
+//                //DoLog($"Using device: {usbDevice.Info.ProductString} { usbDevice.DevicePath}");
 
+//                //foreach (LibUsbDotNet.Main.UsbRegistry reg in LibUsbDotNet.UsbDevice.AllDevices)
+//                //{
+//                //    if (reg.Vid == VID)
+//                //    {
+//                //        DoLog($"LibUsbDotNet: Found device {reg.Name} {reg.DevicePath}");
+//                //        desiredDeviceID = reg.DevicePath;
+//                //    }
+//                //}
 
-        //        //var allUSBdevices = await DeviceManager.Current.GetDevicesAsync(deviceDefinitionsAll);
+//#if false
+//                var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
+//                {
+//                    new FilterDeviceDefinition{ VendorId= Convert.ToUInt32(VID) } //, ProductId=0x1101}
+//                    //new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Usb, VendorId= 0x188a, ProductId=0x1101}
+//                };
+//                foreach (IDevice dev in await DeviceManager.Current.GetDevicesAsync(deviceDefinitions))
+//                {
+//                    if (dev == null) { DoLog("Skipping null-entry"); continue; }
+//                    DoLog($"LibUsbDevice: Checking desired ID up against {dev.DeviceId}...");
+//                    if (dev.DeviceId == desiredDeviceID)
+//                    {
+//                        myDevice = dev;
+//                    }
+//                }
+//#else
+//                DoLog($"We desire {desiredDeviceID}");
 
-        //        //Get the first available device and connect to it
-        //        //var devices = await DeviceManager.Current.GetDevicesAsync(deviceDefinitions);
-        //        //myDevice = devices.FirstOrDefault();
-        //        //if (devices.Count==0 || myDevice == null)
-        //        //LibUsbDevice myLibDevice = 
-        //        //myDevice = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition("usbdevice1.6"));
-        //        //foreach (IDevice dev in allUSBdevices)
-        //        //{
-        //        //    Console.WriteLine($"Checking USB device {dev.DeviceId}...");
-
-        //        //    var newIDevice = DeviceManager.Current.GetDevice(new ConnectedDeviceDefinition(dev.DeviceId));
-        //        //    //LibUsbDotNet.IUsbDevice libDev = 
-
-
-
-
-        //        //    //if (dev. == 0x188a)
-        //        //    //{
-        //        //    //    Console.WriteLine($"{dev.DevicePath} is a match!");
-        //        //    //    myDevice = new LibUsbDevice(dev.UsbRegistryInfo.Device, 2000);
-        //        //    //}
-        //        //};
-        //        if (device == null)
-        //        {
-        //            Console.ForegroundColor = ConsoleColor.Red;
-        //            Console.WriteLine("Unable to find the CI!");
-        //            Console.WriteLine("Are you sure it's supposed to be a USB device and not connected via RS232?");
-        //            Console.WriteLine("There is no reason to continue, I'm going to self-terminate now...");
-        //            Console.ForegroundColor = ConsoleColor.Gray;
-        //            Environment.Exit(0);
-        //            return null;
-        //        }
-        //        else
-        //        {
-        //            Console.WriteLine($"Using device {device.DeviceId}...");
-        //            return device;
-        //        }
-        //    } catch (Exception exception)
-        //    {
-        //        Console.WriteLine(exception.Message);
-        //    }
-        //    return null;
-        //}
-
-        public static async Task ConnectToHIDAsync()
-        {
-            Console.WriteLine("Connecting to Communication Interface (CI) using USB...");
-
-#if LIBUSB
-            LibUsbUsbDeviceFactory.Register();
-#else
-            WindowsUsbDeviceFactory.Register();
-            WindowsHidDeviceFactory.Register();
-#endif
-            try
-            {
-                int VID = 0x188a;   // This is the Vendor ID that we are looking for.
-                string desiredDeviceID = LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath; // We don't know this value at compile time.
-
-                //LibUsbDotNet.UsbDevice.OpenUsbDevice(new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101)).DevicePath
-
-                //LibUsbDotNet.Main.UsbDeviceFinder usbDeviceFinder = new LibUsbDotNet.Main.UsbDeviceFinder(0x188a, 0x1101);
-                //LibUsbDotNet.UsbDevice usbDevice = LibUsbDotNet.UsbDevice.OpenUsbDevice(usbDeviceFinder);
-                //Console.WriteLine($"Using device: {usbDevice.Info.ProductString} { usbDevice.DevicePath}");
-
-                //foreach (LibUsbDotNet.Main.UsbRegistry reg in LibUsbDotNet.UsbDevice.AllDevices)
-                //{
-                //    if (reg.Vid == VID)
-                //    {
-                //        Console.WriteLine($"LibUsbDotNet: Found device {reg.Name} {reg.DevicePath}");
-                //        desiredDeviceID = reg.DevicePath;
-                //    }
-                //}
-
-#if false
-                var deviceDefinitions = new List<FilterDeviceDefinition> //vid_188a&pid_1101
-                {
-                    new FilterDeviceDefinition{ VendorId= Convert.ToUInt32(VID) } //, ProductId=0x1101}
-                    //new FilterDeviceDefinition{ DeviceType= Device.Net.DeviceType.Usb, VendorId= 0x188a, ProductId=0x1101}
-                };
-                foreach (IDevice dev in await DeviceManager.Current.GetDevicesAsync(deviceDefinitions))
-                {
-                    if (dev == null) { Console.WriteLine("Skipping null-entry"); continue; }
-                    Console.WriteLine($"LibUsbDevice: Checking desired ID up against {dev.DeviceId}...");
-                    if (dev.DeviceId == desiredDeviceID)
-                    {
-                        myDevice = dev;
-                    }
-                }
-#else
-                Console.WriteLine($"We desire {desiredDeviceID}");
-
-                DeviceManager deviceManager = DeviceManager.Current;
-                Console.WriteLine(deviceManager.ToString());
-                uint? PID = 0x1101;
-                ushort? UP = 0;
-                List<FilterDeviceDefinition> filterDeviceDefinitions = new List<FilterDeviceDefinition>
-                {
-                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Hid, ProductId = PID, UsagePage = UP },
-                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Usb, ProductId = PID, UsagePage = UP }
-                };
-                foreach (IDevice dev in await deviceManager.GetDevicesAsync(filterDeviceDefinitions))
-                {
-                    if (dev.DeviceId == desiredDeviceID)
-                    {
-                        Console.WriteLine($"Found device: {dev.DeviceId}");
-                        myDevice = dev;
-                    }
-                }
+//                DeviceManager deviceManager = DeviceManager.Current;
+//                DoLog(deviceManager.ToString());
+//                uint? PID = 0x1101;
+//                ushort? UP = 0;
+//                List<FilterDeviceDefinition> filterDeviceDefinitions = new List<FilterDeviceDefinition>
+//                {
+//                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Hid, ProductId = PID, UsagePage = UP },
+//                    new FilterDeviceDefinition { VendorId = Convert.ToUInt32(VID), DeviceType = Device.Net.DeviceType.Usb, ProductId = PID, UsagePage = UP }
+//                };
+//                foreach (IDevice dev in await deviceManager.GetDevicesAsync(filterDeviceDefinitions))
+//                {
+//                    if (dev.DeviceId == desiredDeviceID)
+//                    {
+//                        DoLog($"Found device: {dev.DeviceId}");
+//                        myDevice = dev;
+//                    }
+//                }
                 
-#endif
-                await myDevice.InitializeAsync();
-                readyToTransmit = true;
+//#endif
+//                await myDevice.InitializeAsync();
+//                readyToTransmit = true;
 
-                Console.WriteLine("Listening for incomming data...");
-                bootComplete = true;
-                do
-                {
-                    var readBuffer = await myDevice.ReadAsync();
-                    if (readBuffer.Length > 0) { IncommingData(readBuffer); }
-                } while (true);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-            }
-        }
+//                DoLog("Listening for incomming data...");
+//                bootComplete = true;
+//                do
+//                {
+//                    var readBuffer = await myDevice.ReadAsync();
+//                    if (readBuffer.Length > 0) { IncommingData(readBuffer); }
+//                } while (true);
+//            }
+//            catch (Exception ex)
+//            {
+//                DoLog(ex.Message,5);
+//                DoLog(ex.StackTrace);
+//            }
+//        }
 
         public static async void SendThenBlockTransmit(byte[] dataToSend)
         {
@@ -506,31 +294,22 @@ namespace xComfortWingman
             if (Settings.CONNECTION_MODE == CI_CONNECTION_MODE.RS232_MODE) { dataToSend = AddRS232Bytes(dataToSend); }
             if (dataToSend[0] != 0x00 && dataToSend[0] != Settings.RS232_STARTBYTE ) { dataToSend = AddZeroAsFirstByte(dataToSend); }
 
-            Array.Resize(ref dataToSend, myDevice.ConnectedDeviceDefinition.WriteBufferSize.Value); //If we don't fill the buffer, it will repeat the data instead of using 0x00. That causes strangeness...
+            //Array.Resize(ref dataToSend, myDevice.ConnectedDeviceDefinition.WriteBufferSize.Value); //If we don't fill the buffer, it will repeat the data instead of using 0x00. That causes strangeness...
 
             DateTime start = DateTime.Now;
-            await myDevice.WriteAsync(dataToSend);
+            //await myDevice.WriteAsync(dataToSend);
             
             while (DateTime.Now.Subtract(start).TotalSeconds < 5)
             {
                 if (readyToTransmit) { return; } // No need to wait for timeout!
             }
-            Console.WriteLine("Transmit blockage timed out!");
+            DoLog("Transmit blockage timed out!");
             readyToTransmit = true; // Unlock due to timeout.
         }
 
-        public static async Task SendMQTTMessageAsync(string topic, string payload)
-        {
-            var message = new MqttApplicationMessageBuilder()
-                   .WithTopic(topic)
-                   .WithPayload(payload)
-                   .WithExactlyOnceQoS()
-                   .WithRetainFlag(false)
-                   .Build();
-            await mqttClient.PublishAsync(message);
-        }
+        
                
-        public static void openSerialport()
+        public static void OpenSerialport()
         {
             SerialPort com = new SerialPort(Settings.RS232_PORT,Settings.RS232_BAUD)
             {
@@ -541,7 +320,7 @@ namespace xComfortWingman
             com.DataReceived += new SerialDataReceivedEventHandler(DataReceivedHandler);
             
             com.Open();
-            Console.WriteLine($"{com.PortName} is open: " + com.IsOpen);
+            DoLog($"{com.PortName} is open: " + com.IsOpen);
 
             //{ 0x5A, 0x06, 0xB1, 0x02, 0x0A, 0x01, 0x70, 0xA5 }; // Turns on DP #2
 
@@ -553,7 +332,7 @@ namespace xComfortWingman
 
         private static void DataReceivedHandler(object sender, SerialDataReceivedEventArgs e)
         {
-            //Console.WriteLine("Receiving data:");
+            //DoLog("Receiving data:");
             SerialPort sp = (SerialPort)sender;
             
             string myData = sp.ReadExisting();
@@ -583,19 +362,19 @@ namespace xComfortWingman
             }
         }
 
-        private static async void broadcastChange(int dataPointID, string dataValue){
+        private static async void BroadcastChange(int dataPointID, string dataValue){
             //This is where we tell BachelorPad about the change that has been made.
             //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
-            Console.WriteLine("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just reported value " + dataValue);
-            await SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+            DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just reported value " + dataValue);
+            await mqtt.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
         }
 
-        private static async void broadcastAck(int dataPointID, string dataValue)
+        private static async void BroadcastAck(int dataPointID, string dataValue)
         {
             //This is where we tell BachelorPad about the change that has been made.
             //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
-            Console.WriteLine("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just confirmed value " + dataValue);
-            await SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
+            DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just confirmed value " + dataValue);
+            await mqtt.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
         }
 
         private static void ImportDatapointsFromFile(String filePath)
@@ -613,7 +392,7 @@ namespace xComfortWingman
              */
             if (!File.Exists(filePath))
             {
-                Console.WriteLine("Datapoint file not found!");
+                DoLog("Datapoint file not found!");
                 return;
             }
             string aline;
@@ -624,9 +403,9 @@ namespace xComfortWingman
                 {
                     string[] line = aline.Split("\t");
                     datapoints.Add(new Datapoint(Convert.ToInt32(line[0]), line[1], Convert.ToInt32(line[2]), Convert.ToInt32(line[3]), Convert.ToInt32(line[4]), Convert.ToInt32(line[5]), Convert.ToInt32(line[6]), line[7]));
-                    //Console.WriteLine("Added datapoint #" + line[0] + " named " + line[1]);
+                    //DoLog("Added datapoint #" + line[0] + " named " + line[1]);
                 }
-                Console.WriteLine("There are now " + datapoints.Count + " datapoints registered in the system!");
+                DoLog("There are now " + datapoints.Count + " datapoints registered in the system!");
             }
             fileStream.Close();
         }
@@ -657,51 +436,57 @@ namespace xComfortWingman
 
             if (Settings.RAW_ENABLED)
             {
-               await SendMQTTMessageAsync("BachelorPad/xComfort/RAW", FormatByteForPrint(dataFromCI, true));
+                DoLog("Sending RAW data via MQTT...", 1, false);
+                await mqtt.SendMQTTMessageAsync("BachelorPad/xComfort/RAW", FormatByteForPrint(dataFromCI, true));
+                DoLog("OK", 1, true, 10);
             }
 
             byte MGW_TYPE = dataFromCI[1];
             switch (MGW_TYPE){
                 case MGW_PT_RX: // Incomming transmission from some device
                     {
+                        DoLog("This was a RX packet", 1);
                         //                          Length          Type          Datapoint       Msg type      Data type      Info short               {   Data 0          Data 1          Data 2          Data 3   }      RSSI            Battery
                         //HandleRX(new PT_RX.Packet(dataFromCI[0], dataFromCI[1], dataFromCI[2], dataFromCI[3], dataFromCI[4], dataFromCI[5], new byte[4] { dataFromCI[6], dataFromCI[7], dataFromCI[8] , dataFromCI[9]}, dataFromCI[10], dataFromCI[11], 0));
-                        HandleRX(new PT_RX.Packet(dataFromCI[0], dataFromCI[1], dataFromCI[2], dataFromCI[3], dataFromCI[4], dataFromCI[5], new byte[4] { dataFromCI[9], dataFromCI[8], dataFromCI[7], dataFromCI[6] }, dataFromCI[10], dataFromCI[11], dataFromCI[12]));
+                        HandleRX(new PT_RX.Packet(dataFromCI[0], dataFromCI[1], dataFromCI[2], dataFromCI[3], dataFromCI[4], dataFromCI[5], new byte[4] { dataFromCI[9], dataFromCI[8], dataFromCI[7], dataFromCI[6] }, dataFromCI[10], dataFromCI[11], dataFromCI[12]),true);
                         break;
                     }
                 case MGW_PT_TX: // This is strictly speaking a packet that we are sending, never receiving...
                     {
-                        Console.WriteLine("If you're seeing this, it means that outbound data has ended up as inbound. This is not really possible!");
+                        DoLog("If you're seeing this, it means that outbound data has ended up as inbound. This is not really possible!",5);
                         break;
                     }
                 case MGW_PT_CONFIG: // Configuration info
                     {
-                        Console.WriteLine("Config data!");
+                        DoLog("This was a config packet", 1);
+                        DoLog("Config data!");
                         break;
                     }
                 case MGW_PT_STATUS: // Incomming status. Generated by the interface device, not arrived by radio transmissions.
                     {
+                        DoLog("This was a status packet", 1);
                         //                                Length         Type           StatusType     Status         StatusData {   Data 0          Data 1          Data 2          Data 3   }
                         HandleStatus(new PT_STATUS.Packet(dataFromCI[0], dataFromCI[1], dataFromCI[2], dataFromCI[3], new byte[4]{ dataFromCI[4], dataFromCI[5], dataFromCI[6], dataFromCI[7] }));
                         break;
                     }
                 default:
                     {
-                        Console.WriteLine("Unexpected type: " + Convert.ToString(MGW_TYPE,16).ToUpper().PadLeft(2,'0'));
+                        DoLog("Unexpected type: " + Convert.ToString(MGW_TYPE,16).ToUpper().PadLeft(2,'0'),4);
                         break;
                     }
             }
 
-            int dataLength = dataFromCI[0];
-            byte dataType = dataFromCI[1];
+            //int dataLength = dataFromCI[0];
+            //byte dataType = dataFromCI[1];
 
         }
 
-        static async void SendDataToDP(int DP, double dataDouble)
+        public static async void SendDataToDP(int DP, double dataDouble)
         {
             if (!readyToTransmit)
             {
                 // We're not ready, let's wait...
+                DoLog("We're not ready to transmit yet...", 2);
                 DateTime start = DateTime.Now;
                 while (!readyToTransmit)
                 {
@@ -709,17 +494,18 @@ namespace xComfortWingman
                     {
                         // This should never actually happen, as there is another timeout function.
                         // But we'll include it anyway, as it could prevent a total hang if the first function fails.
-                        Console.WriteLine($"Command to DP #{DP} timed out!");
+                        DoLog($"Command to DP #{DP} timed out!",4);
                         readyToTransmit = true;
                         return;
                     }
+                    Thread.Sleep(200);
                 }
             };
 
             Datapoint myDP = datapoints.Find(x => x.DP == DP);
             DeviceType myDT = devicetypes.Find(x => x.ID == myDP.Type);
 
-            byte[] myCommand = new byte[myDevice.ConnectedDeviceDefinition.WriteBufferSize.Value]; 
+            byte[] myCommand = new byte[myDevice.GetMaxOutputReportLength()];  //.ConnectedDeviceDefinition.WriteBufferSize.Value]; 
             myCommand[0] = 0x00; // This one is not interpreted as data, it is ignored.
             myCommand[1] = 0x09; // This is the length of the packet. It can be dynamic, but it's also safe to use a fixed value of 0x09 and pad with 0x00.
             myCommand[2] = 0xB1; // This indicates that we want to control a datapoint.
@@ -731,7 +517,7 @@ namespace xComfortWingman
             myCommand[8] = 0x00; // ---- || -----
             myCommand[9] = 0x00; // Sequence number + priority (If used) 0x00 is a safe value in any case.
 
-            Console.WriteLine($"Setting DP #{ DP } ({ myDP.Name }) to {dataDouble}.");
+            DoLog($"Setting DP #{ DP } ({ myDP.Name }) to {dataDouble}.");
 
             switch (myDP.Type)
             {
@@ -781,22 +567,22 @@ namespace xComfortWingman
                         {
                             case 0x01: //MGW_CM_AUTO(default)
                                 {
-                                    Console.WriteLine($"Interface connection mode: AUTO (default)");
+                                    DoLog($"Interface connection mode: AUTO (default)");
                                     break;
                                 }
                             case 0x02: //MGW_CM_USB
                                 {
-                                    Console.WriteLine($"Interface connection mode: USB");
+                                    DoLog($"Interface connection mode: USB");
                                     break;
                                 }
                             case 0x03: //MGW_CM_RS232
                                 {
-                                    Console.WriteLine($"Interface connection mode: RS232");
+                                    DoLog($"Interface connection mode: RS232");
                                     break;
                                 }
                             default:
                                 {
-                                    Console.WriteLine($"Unknown connex status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown connex status: {statusPacket.MGW_ST_STATUS}",5);
                                     break;
                                 }
                         }
@@ -813,12 +599,12 @@ namespace xComfortWingman
                                     {
                                         case 0xA9:
                                             {
-                                                Console.WriteLine("General error!\nAssuming invalid datapoint for this interface. (Consider using MRF to update associations)");
+                                                DoLog("General error!\nAssuming invalid datapoint for this interface. (Consider using MRF to update associations)",4);
                                                 break;
                                             }
                                         default:
                                             {
-                                                Console.WriteLine($"Error! General error, data: {Convert.ToString(statusPacket.MGW_ST_DATA[0], 16).ToUpper().PadLeft(2, '0')}, {Convert.ToString(statusPacket.MGW_ST_DATA[1], 16).ToUpper().PadLeft(2, '0')}");
+                                                DoLog($"Error! General error, data: {Convert.ToString(statusPacket.MGW_ST_DATA[0], 16).ToUpper().PadLeft(2, '0')}, {Convert.ToString(statusPacket.MGW_ST_DATA[1], 16).ToUpper().PadLeft(2, '0')}",4);
                                                 break;
                                             }
                                     }
@@ -826,45 +612,45 @@ namespace xComfortWingman
                                 }
                             case 0x01://MGW_STS_UNKNOWN (DATA: specific code)       Msg Unknown
                                 {
-                                    Console.WriteLine($"Error! Unknown error, data: {Convert.ToString(statusPacket.MGW_ST_DATA[0], 16).ToUpper().PadLeft(2, '0')}, {Convert.ToString(statusPacket.MGW_ST_DATA[1], 16).ToUpper().PadLeft(2, '0')}");
+                                    DoLog($"Error! Unknown error, data: {Convert.ToString(statusPacket.MGW_ST_DATA[0], 16).ToUpper().PadLeft(2, '0')}, {Convert.ToString(statusPacket.MGW_ST_DATA[1], 16).ToUpper().PadLeft(2, '0')}",4);
                                     break;
                                 }
                             case 0x02://MGW_STS_DP_OOR                              Datapoint out of range
                                 {
-                                    Console.WriteLine("Error! Datapoint out of range!");
+                                    DoLog("Error! Datapoint out of range!",4);
                                     break;
                                 }
                             case 0x03://MGW_STS_BUSY_MRF                            RF Busy (Tx Msg lost)
                                 {
-                                    Console.WriteLine("Error! RF busy, TX message lost");
+                                    DoLog("Error! RF busy, TX message lost", 4);
                                     break;
                                 }
                             case 0x04://MGW_STS_BUSY_MRF_RX                         RF Busy (Rx in progress)
                                 {
-                                    Console.WriteLine("Error! RF busy, RX in progress...");
+                                    DoLog("Error! RF busy, RX in progress...", 4);
                                     break;
                                 }
                             case 0x05://MGW_STS_TX_MSG_LOST                         Tx-Msg lost, repeat it (buffer full)
                                 {
-                                    //Console.WriteLine("Error! TX mesage lost, buffer full!");
-                                    Console.Write("WARNING! TX message was lost!");
+                                    //DoLog("Error! TX mesage lost, buffer full!");
+                                    Console.Write("WARNING! TX message was lost!", 4);
                                     //readyToTransmit = false;
                                     denyReady = true;
                                     byte maskSequence = 0x0F;      // 00001111
                                     byte seq = statusPacket.MGW_ST_DATA[1];
                                     seq &= maskSequence;
-                                    Console.WriteLine($" Re-sending message #{seq}...");
-                                    myDevice.WriteAsync(messageHistory[seq]);
+                                    DoLog($" Re-sending message #{seq}...");
+                                    //myDevice.WriteAsync(messageHistory[seq]);
                                     break;
                                 }
                             case 0x06: //MGW_STS_NO_ACK                             RF ≥90: Timeout, no ACK received!
                                 {
-                                    Console.WriteLine("Timeout, no ACK reveived!");
+                                    DoLog("Timeout, no ACK reveived!", 4);
                                     break;
                                 }
                             default:   //                                           Completely undocumented!
                                 {
-                                    Console.WriteLine("Undocumented error!");
+                                    DoLog("Undocumented error!",4);
                                     break;
                                 }
                         }
@@ -876,22 +662,22 @@ namespace xComfortWingman
                         {
                             case 0x01: //LED standard mode (default)
                                 {
-                                    Console.WriteLine($"LED is in standard mode.");
+                                    DoLog($"LED is in standard mode.");
                                     break;
                                 }
                             case 0x02: //switch green LED to "reverse" fct
                                 {
-                                    Console.WriteLine($"LED is in reversed mode.");
+                                    DoLog($"LED is in reversed mode.");
                                     break;
                                 }
                             case 0x03: //switch LEDs completely off
                                 {
-                                    Console.WriteLine($"LED is turned off.");
+                                    DoLog($"LED is turned off.");
                                     break;
                                 }
                             default:
                                 {
-                                    Console.WriteLine($"Unknown LED status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown LED status: {statusPacket.MGW_ST_STATUS}",4);
                                     break;
                                 }
                         }
@@ -899,7 +685,7 @@ namespace xComfortWingman
                     }
                 case PT_STATUS.MGW_ST_TYPE.MGW_STT_LED_DIM:
                     {
-                        Console.WriteLine($"LED brightness: {statusPacket.MGW_ST_STATUS}%");
+                        DoLog($"LED brightness: {statusPacket.MGW_ST_STATUS}%");
                         break;
                     }
                 case PT_STATUS.MGW_ST_TYPE.MGW_STT_OK: //       The most common status type
@@ -913,36 +699,36 @@ namespace xComfortWingman
                                     {
                                         case 0x00:  //MGW_STD_OKMRF_NOINFO          RF Rel. 60
                                             {
-                                                Console.WriteLine("MRF OK!");
+                                                DoLog("MRF OK!");
                                                 break;
                                             }
                                         case 0x10://MGW_STD_OKMRF_ACK_DIRECT        RF ≥90: ACK from controlled device
                                             {
-                                                Console.WriteLine("MRF OK! (Direct)");
+                                                DoLog("MRF OK! (Direct)");
                                                 //broadcastAck()
                                                 break;
                                             }
 
                                         case 0x20://MGW_STD_OKMRF_ACK_ROUTED        RF ≥90: ACK from routing device
                                             {
-                                                Console.WriteLine("MRF OK! (Routed)");
+                                                DoLog("MRF OK! (Routed)");
                                                 break;
                                             }
 
                                         case 0x30://MGW_STD_OKMRF_ACK
                                             {
-                                                Console.WriteLine("MRF OK! (ACK)");
+                                                DoLog("MRF OK! (ACK)");
                                                 break;
                                             }
                                         case 0x40://MGW_STD_OKMRF_ACK_BM            RF ≥91: ACK, device in learnmode
                                             {
-                                                Console.WriteLine("MRF OK! (Device in learn mode)");
+                                                DoLog("MRF OK! (Device in learn mode)");
                                                 break;
                                             }
 
                                         case 0x50://MGW_STD_OKMRF_DPREMOVED         RF ≥90: Basic Mode: DP removed
                                             {
-                                                Console.WriteLine("MRF OK! (Basic, DP removed)");
+                                                DoLog("MRF OK! (Basic, DP removed)");
                                                 break;
                                             }
                                     }
@@ -951,17 +737,17 @@ namespace xComfortWingman
                                 }
                             case 0x05: // MGW_STS_OK_CONFIG
                                 {
-                                    Console.WriteLine("Config OK!");
+                                    DoLog("Config OK!");
                                     break;
                                 }
                             case 0xCE: // MGW_STS_OK_BTF
                                 {
-                                    Console.WriteLine("BackToFactory OK!");
+                                    DoLog("BackToFactory OK!");
                                     break;
                                 }
                             default:
                                 {
-                                    Console.WriteLine($"Unknown status data for MGW_STT_OK: {statusPacket.MGW_ST_DATA[0]}");
+                                    DoLog($"Unknown status data for MGW_STT_OK: {statusPacket.MGW_ST_DATA[0]}",4);
                                     break;
                                 }
                         }                        
@@ -969,7 +755,7 @@ namespace xComfortWingman
                     }
                 case PT_STATUS.MGW_ST_TYPE.MGW_STT_RELEASE:
                     {
-                        Console.WriteLine($"RF-version: {statusPacket.MGW_ST_DATA[0]}.{statusPacket.MGW_ST_DATA[1]}, Firmware: {statusPacket.MGW_ST_DATA[2]}.{statusPacket.MGW_ST_DATA[3]}");
+                        DoLog($"RF-version: {statusPacket.MGW_ST_DATA[0]}.{statusPacket.MGW_ST_DATA[1]}, Firmware: {statusPacket.MGW_ST_DATA[2]}.{statusPacket.MGW_ST_DATA[3]}");
                         readyToTransmit = true;
                         break;
                     }
@@ -979,47 +765,47 @@ namespace xComfortWingman
                         {
                             case 0x01: //MGW_CM_BD1200
                                 {
-                                    Console.WriteLine($"Interface baudrate: 1200");
+                                    DoLog($"Interface baudrate: 1200");
                                     break;
                                 }
                             case 0x02: //MGW_CM_BD2400
                                 {
-                                    Console.WriteLine($"Interface baudrate: 2400");
+                                    DoLog($"Interface baudrate: 2400");
                                     break;
                                 }
                             case 0x03: //MGW_CM_BD4800
                                 {
-                                    Console.WriteLine($"Interface baudrate: 4800");
+                                    DoLog($"Interface baudrate: 4800");
                                     break;
                                 }
                             case 0x04: //MGW_CM_BD9600
                                 {
-                                    Console.WriteLine($"Interface baudrate: 9600");
+                                    DoLog($"Interface baudrate: 9600");
                                     break;
                                 }
                             case 0x05: //MGW_CM_BD14400
                                 {
-                                    Console.WriteLine($"Interface baudrate: 14400");
+                                    DoLog($"Interface baudrate: 14400");
                                     break;
                                 }
                             case 0x06: //MGW_CM_BD19200
                                 {
-                                    Console.WriteLine($"Interface baudrate: 19200");
+                                    DoLog($"Interface baudrate: 19200");
                                     break;
                                 }
                             case 0x07: //MGW_CM_BD38400(actually 37.500 Bit / s))
                                 {
-                                    Console.WriteLine($"Interface baudrate: 37500");
+                                    DoLog($"Interface baudrate: 37500");
                                     break;
                                 }
                             case 0x08: //MGW_CM_BD57600(default)
                                 {
-                                    Console.WriteLine($"Interface baudrate: 57600 (Default)");
+                                    DoLog($"Interface baudrate: 57600 (Default)");
                                     break;
                                 }
                             default:
                                 {
-                                    Console.WriteLine($"Unknown baudrate: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown baudrate: {statusPacket.MGW_ST_STATUS}",4);
                                     break;
                                 }
                         }
@@ -1031,17 +817,17 @@ namespace xComfortWingman
                         {
                             case 0x00: //Not set
                                 {
-                                    Console.WriteLine($"CRC not in use");
+                                    DoLog($"CRC not in use");
                                     break;
                                 }
                             case 0x01: //Set
                                 {
-                                    Console.WriteLine($"CRC in use");
+                                    DoLog($"CRC in use");
                                     break;
                                 }
                             default: //Unknown
                                 {
-                                    Console.WriteLine($"Unknown CRC status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown CRC status: {statusPacket.MGW_ST_STATUS}", 4);
                                     break;
                                 }
                         }
@@ -1053,17 +839,17 @@ namespace xComfortWingman
                         {
                             case 0x00: //Not set
                                 {
-                                    Console.WriteLine($"Flow control not in use");
+                                    DoLog($"Flow control not in use");
                                     break;
                                 }
                             case 0x01: //Set
                                 {
-                                    Console.WriteLine($"Flow control in use");
+                                    DoLog($"Flow control in use");
                                     break;
                                 }
                             default: //Unknown
                                 {
-                                    Console.WriteLine($"Unknown flow control status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown flow control status: {statusPacket.MGW_ST_STATUS}", 4);
                                     break;
                                 }
                         }
@@ -1075,17 +861,17 @@ namespace xComfortWingman
                         {
                             case 0x00: //Not set
                                 {
-                                    Console.WriteLine($"Tg-class not in use");
+                                    DoLog($"Tg-class not in use");
                                     break;
                                 }
                             case 0x01: //Set
                                 {
-                                    Console.WriteLine($"Tg-class in use");
+                                    DoLog($"Tg-class in use");
                                     break;
                                 }
                             default: //Unknown
                                 {
-                                    Console.WriteLine($"Unknown Tg-class status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown Tg-class status: {statusPacket.MGW_ST_STATUS}",4);
                                     break;
                                 }
                         }
@@ -1097,17 +883,17 @@ namespace xComfortWingman
                         {
                             case 0x00: //Not set
                                 {
-                                    Console.WriteLine($"OK_MRF not in use");
+                                    DoLog($"OK_MRF not in use");
                                     break;
                                 }
                             case 0x01: //Set
                                 {
-                                    Console.WriteLine($"OK_MRF in use");
+                                    DoLog($"OK_MRF in use");
                                     break;
                                 }
                             default: //Unknown
                                 {
-                                    Console.WriteLine($"Unknown OK_MRF status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown OK_MRF status: {statusPacket.MGW_ST_STATUS}", 4);
                                     break;
                                 }
                         }
@@ -1119,17 +905,17 @@ namespace xComfortWingman
                         {
                             case 0x00: // Not set
                                 {
-                                    Console.WriteLine($"Send RF sequence number not set!");
+                                    DoLog($"Send RF sequence number not set!");
                                     break;
                                 }
                             case 0x01: // Set
                                 {
-                                    Console.WriteLine($"Send RF sequence number set!");
+                                    DoLog($"Send RF sequence number set!");
                                     break;
                                 }
                             default:
                                 {
-                                    Console.WriteLine($"Unknown RF sequence number status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown RF sequence number status: {statusPacket.MGW_ST_STATUS}", 4);
                                     break;
                                 }
                         }
@@ -1139,7 +925,7 @@ namespace xComfortWingman
                     {
                         Console.Write($"Serial: { BitConverter.ToInt32(statusPacket.MGW_ST_DATA, 0)}");
                         Array.Reverse(statusPacket.MGW_ST_DATA);
-                        Console.WriteLine($" or { BitConverter.ToInt32(statusPacket.MGW_ST_DATA, 0)} ?");
+                        DoLog($" or { BitConverter.ToInt32(statusPacket.MGW_ST_DATA, 0)} ?");
 
                         break;
                     }
@@ -1149,27 +935,27 @@ namespace xComfortWingman
                         {
                             case 0x00://MGW_STS_DATA        DATA contains timeaccount in %
                                 {
-                                    Console.WriteLine($"Timeaccount: {statusPacket.MGW_ST_DATA[0]}%");
+                                    DoLog($"Timeaccount: {statusPacket.MGW_ST_DATA[0]}%");
                                     break;
                                 }
                             case 0x01://MGW_STS_IS_0        no more Tx-msg possible
                                 {
-                                    Console.WriteLine($"No more transmissions possible!");
+                                    DoLog($"No more transmissions possible!");
                                     break;
                                 }
                             case 0x02://MGW_STS_LESS_10     timeaccount fell under 10%
                                 {
-                                    Console.WriteLine($"Timeaccount: <10% and sinking.");
+                                    DoLog($"Timeaccount: <10% and sinking.");
                                     break;
                                 }
                             case 0x03://MGW_STS_MORE_15     timeaccount climbed above 15%
                                 {
-                                    Console.WriteLine($"Timeaccount: >15% and rising.");
+                                    DoLog($"Timeaccount: >15% and rising.");
                                     break;
                                 }
                             default:
                                 {
-                                    Console.WriteLine($"Unknown Timeaccount status: {statusPacket.MGW_ST_STATUS}");
+                                    DoLog($"Unknown Timeaccount status: {statusPacket.MGW_ST_STATUS}", 4);
                                     break;
                                 }
                         }
@@ -1177,25 +963,25 @@ namespace xComfortWingman
                     }
                 case PT_STATUS.MGW_ST_TYPE.MGW_STT_COUNTER_RX:
                     {
-                        Console.WriteLine($"RX counter: {statusPacket.MGW_ST_STATUS}");
+                        DoLog($"RX counter: {statusPacket.MGW_ST_STATUS}");
                         break;
                     }
                 case PT_STATUS.MGW_ST_TYPE.MGW_STT_COUNTER_TX:
                     {
-                        Console.WriteLine($"TX counter: {statusPacket.MGW_ST_STATUS}");
+                        DoLog($"TX counter: {statusPacket.MGW_ST_STATUS}");
                         break;
                     }
                 default:
                     {
-                        Console.WriteLine($"Unknown status type: {statusPacket.MGW_ST_TYPE }");
+                        DoLog($"Unknown status type: {statusPacket.MGW_ST_TYPE }", 4);
                         break;
                     }
             }
             if (!denyReady) { readyToTransmit = true; } // If not, any status would stop the entire program...
         }
-      
 
-        static async void HandleRX(PT_RX.Packet rxPacket, bool assignPacket) // Handling packets containing info about other devices
+
+        static void HandleRX(PT_RX.Packet rxPacket, bool assignPacket) // Handling packets containing info about other devices
         {
             try
             {
@@ -1203,7 +989,7 @@ namespace xComfortWingman
                 Datapoint datapoint = datapoints.Find(x => x.DP == rxPacket.MGW_RX_DATAPOINT);
                 if (datapoint == null)
                 {
-                    Console.WriteLine("Datapoint " + rxPacket.MGW_RX_DATAPOINT + " was not found!");
+                    DoLog("Datapoint " + rxPacket.MGW_RX_DATAPOINT + " was not found!", 4);
                     return;
                 }
                 DeviceType devicetype = devicetypes.Find(x => x.Number == datapoint.Type);
@@ -1215,6 +1001,7 @@ namespace xComfortWingman
 
                 if (assignPacket)
                 {
+                    DoLog("Updating datapoint...", 0);
                     datapoint.LatestDataValues = rxPacket;
                     datapoint.LastUpdate = DateTime.Now;
                 }
@@ -1224,7 +1011,7 @@ namespace xComfortWingman
                 //      For room controllers, we need to know what mode it's in.
                 //      For dimmers, we only need the percentage from Info Short.
 
-                Console.WriteLine("DataType=" + devicetype.DataTypes[0].ToString());
+                DoLog("DataType=" + devicetype.DataTypes[0].ToString());
 
 
                 if (devicetype.DataTypes[0] == (MGW_RDT_NO_DATA))
@@ -1235,25 +1022,25 @@ namespace xComfortWingman
                         case MGW_RMT_ON:
                             {
                                 //The device has been turned on!
-                                broadcastChange(datapoint.DP, "ON");
+                                BroadcastChange(datapoint.DP, "ON");
                                 break;
                             }
                         case MGW_RMT_OFF:
                             {
                                 //The device has been turned off!
-                                broadcastChange(datapoint.DP, "OFF");
+                                BroadcastChange(datapoint.DP, "OFF");
                                 break;
                             }
                         case MGW_RMT_SWITCH_ON:
                             {
                                 //The device has been turned on!
-                                broadcastChange(datapoint.DP, "ON");
+                                BroadcastChange(datapoint.DP, "ON");
                                 break;
                             }
                         case MGW_RMT_SWITCH_OFF:
                             {
                                 //The device has been turned off!
-                                broadcastChange(datapoint.DP, "OFF");
+                                BroadcastChange(datapoint.DP, "OFF");
                                 break;
                             }
                         case MGW_RMT_UP_PRESSED:
@@ -1289,23 +1076,25 @@ namespace xComfortWingman
                         case MGW_RMT_VALUE:
                             {
                                 //Analogue value
-                                broadcastChange(datapoint.DP, GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData).ToString());
+                                BroadcastChange(datapoint.DP, GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData).ToString());
                                 break;
                             }
                         case MGW_RMT_TOO_COLD:
                             {
                                 //"Cold" - This means that the temperature is below the set threshold value
+                                DoLog("Too cold!");
                                 break;
                             }
                         case MGW_RMT_TOO_WARM:
                             {
                                 //"Warm" - This means that the temperature is above the set threshold value
+                                DoLog("Too hot!");
                                 break;
                             }
                         case MGW_RMT_STATUS:
                             {
                                 //Data about the current status
-                                broadcastAck(rxPacket.MGW_RX_DATAPOINT, rxPacket.MGW_RX_INFO_SHORT.ToString());
+                                BroadcastAck(rxPacket.MGW_RX_DATAPOINT, rxPacket.MGW_RX_INFO_SHORT.ToString());
                                 break;
                             }
                         case MGW_RMT_BASIC_MODE:
@@ -1316,6 +1105,7 @@ namespace xComfortWingman
                         default:
                             {
                                 //If any unexpected values should appear, they'll be handled here.
+                                DoLog($"Unexpected value: {rxPacket.MGW_RX_MSG_TYPE.ToString()}", 4);
                                 break;
                             }
                     }
@@ -1327,6 +1117,7 @@ namespace xComfortWingman
                     //Since there is a different data type, we need to know more.
                     //These types have other data types than NO_DATA:
                     //5 22 23 24 26 28 51 52 53 54 55 62 65 68 69 71 72 74
+                    DoLog($"Datapoint type: {datapoint.Type}", 0);
                     switch (datapoint.Type)
                     {
                         case 5:     // Room controller
@@ -1343,7 +1134,7 @@ namespace xComfortWingman
                                                         //Mode 0 (Send switching commands): MGW_RDT_RC_DATA(temperature and wheel; MGW_RX_MSG_TYPE = MGW_RMT_TOO_COLD / MGW_RMT_TOO_WARM)
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
-                                                        broadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
+                                                        BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
                                                         break;
                                                     }
                                                 default:
@@ -1351,7 +1142,7 @@ namespace xComfortWingman
                                                         //Mode 1 (Send temperature value):  MGW_RDT_RC_DATA(temperature and wheel; MGW_RX_MSG_TYPE = MGW_RMT_VALUE)
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
-                                                        broadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
+                                                        BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
                                                         break;
                                                     }
                                             }
@@ -1366,7 +1157,7 @@ namespace xComfortWingman
                                                         //Mode 0 (Send switching commands): MGW_RDT_FLOAT(humidity value in percent; MGW_RX_MSG_TYPE = MGW_RMT_SWITCH_ON / MGW_RMT_SWITCH_OFF)
                                                         double data = new double();
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                        broadcastChange(datapoint.DP, data.ToString());
+                                                        BroadcastChange(datapoint.DP, data.ToString());
                                                         break;
                                                     }
                                                 default:
@@ -1374,7 +1165,7 @@ namespace xComfortWingman
                                                         //Mode 1 (Send humidity value):     MGW_RDT_FLOAT(humidity value in percent; MGW_RX_MSG_TYPE = MGW_RMT_VALUE)
                                                         double data = new double();
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                        broadcastChange(datapoint.DP, data.ToString());
+                                                        BroadcastChange(datapoint.DP, data.ToString());
                                                         break;
                                                     }
                                             }
@@ -1397,7 +1188,7 @@ namespace xComfortWingman
                                             //Mode 0 (Send switching commands): MGW_RDT_INT16_1POINT; MGW_RX_MSG_TYPE = MGW_RMT_TOO_COLD / MGW_RMT_TOO_WARM)
                                             double data = new double();
                                             data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                            broadcastChange(datapoint.DP, data.ToString());
+                                            BroadcastChange(datapoint.DP, data.ToString());
                                             break;
                                         }
                                     default:
@@ -1405,7 +1196,7 @@ namespace xComfortWingman
                                             //Mode 1 (Send temperature value):  MGW_RDT_INT16_1POINT; MGW_RX_MSG_TYPE = MGW_RMT_VALUE)
                                             double data = new double();
                                             data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                            broadcastChange(datapoint.DP, data.ToString());
+                                            BroadcastChange(datapoint.DP, data.ToString());
                                             break;
                                         }
                                 }
@@ -1528,9 +1319,10 @@ namespace xComfortWingman
                             }
                     }
                 }
-            }catch(Exception ex)
+            }
+            catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                DoLog(ex.Message, 5);
             }
         }
         static void HandleRX(PT_RX.Packet rxPacket) 
@@ -1761,7 +1553,7 @@ namespace xComfortWingman
         
         public static void PrintByte(byte[] bytesToPrint, string caption, bool minimalistic) // Used for printing byte arrays as HEX values with spaces between. Makes reading much easier!
         {
-            Console.WriteLine($"{caption}: {FormatByteForPrint(bytesToPrint,minimalistic)}");
+            DoLog($"{caption}: {FormatByteForPrint(bytesToPrint,minimalistic)}");
         }
 
         public static void PrintByte(byte[] bytesToPrint, string caption) // Shorter signature, defaults to minimalistic printing.
@@ -1821,6 +1613,6 @@ namespace xComfortWingman
             }
         }
 
-#endregion
+        #endregion
     }
 }

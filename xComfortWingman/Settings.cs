@@ -8,19 +8,19 @@ namespace xComfortWingman
 {
     #region "Enums"
 
-    enum MQTT_CONNECTION_MODE
+    public enum MQTT_CONNECTION_MODE
     {
         TCP,
         WEBSOCKET
     }
 
-    enum CI_CONNECTION_MODE
+    public enum CI_CONNECTION_MODE
     {
         USB_MODE,
         RS232_MODE
     }
 
-    enum CI_RS232_BAUD
+    public enum CI_RS232_BAUD
     {
         BD_1200,
         BD_2400,
@@ -31,8 +31,10 @@ namespace xComfortWingman
         BD_57600
     }
     #endregion
-    class Settings
+    public class Settings
     {
+
+
         // General settings
         public bool RAW_ENABLED { get; set; } = true;
         public int RMF_TIMEOUT { get; set; } = 5000;
@@ -130,7 +132,7 @@ namespace xComfortWingman
                 return true;
             }catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.Message,5);
                 return false;
             }
         }
@@ -147,7 +149,7 @@ namespace xComfortWingman
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.Message,5);
                 return false;
             }
         }
