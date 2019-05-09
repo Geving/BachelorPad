@@ -1065,6 +1065,7 @@ namespace xComfortWingman
                         case MGW_RMT_FORCED:
                             {
                                 //Fixed value
+                                BroadcastChange(datapoint.DP, "Fixed value");
                                 break;
                             }
                         case MGW_RMT_SINGLE_ON:
@@ -1081,12 +1082,14 @@ namespace xComfortWingman
                         case MGW_RMT_TOO_COLD:
                             {
                                 //"Cold" - This means that the temperature is below the set threshold value
+                                // Depending on the xComfort installation, this might have triggered a second device, like a valve actuator or such.
                                 DoLog("Too cold!");
                                 break;
                             }
                         case MGW_RMT_TOO_WARM:
                             {
                                 //"Warm" - This means that the temperature is above the set threshold value
+                                // Depending on the xComfort installation, this might have triggered a second device, like a valve actuator or such.
                                 DoLog("Too hot!");
                                 break;
                             }
@@ -1176,6 +1179,7 @@ namespace xComfortWingman
                         case 22:    // Home manager
                             {
                                 // This one has 99 channels, and it's impossible to act without knowing what device is associated with each channel (which represents datapoints, actually)
+                                BroadcastChange(datapoint.DP, $"Datapoint: {datapoint.Channel}, Data: {rxPacket.MGW_RX_DATA[0]} {rxPacket.MGW_RX_DATA[1]} {rxPacket.MGW_RX_DATA[2]} {rxPacket.MGW_RX_DATA[3]}");
                                 break;
                             }
                         case 23:    // Temperature Input
@@ -1206,114 +1210,116 @@ namespace xComfortWingman
                                 if (rxPacket.MGW_RX_DATA_TYPE == MGW_RDT_INT16_1POINT)
                                 {
                                     //This is a temperature reading
+                                    switch (datapoint.Mode)
+                                    {
+                                        case 0:
+                                            {
+                                                // This is a Too hot/Too cold value
+                                                double data = new double();
+                                                data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
+                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                break;
+                                            }
+                                        case 1:
+                                            {
+                                                // This is the temperature measurement value
+                                                double data = new double();
+                                                data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
+                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                break;
+                                            }
+                                    }
+                                    
                                 }
                                 else
                                 {
-                                    //This is an analogue reading
-                                }
-                                switch (datapoint.Channel)
-                                {
-                                    case 0:
-                                        {
-                                            switch (datapoint.Mode)
+                                    //This is an analogue reading (0 - 10V or 0/4 - 20mA)
+                                    switch (datapoint.Mode)
+                                    {
+                                        case 0:
                                             {
-                                                case 0:
-                                                    {
-                                                        // This is an ON/OFF value
-                                                        break;
-                                                    }
-                                                case 1:
-                                                    {
-                                                        // This is the analogue voltage value
-                                                        break;
-                                                    }
-                                                case 2:
-                                                    {
-                                                        // This is a percentage value
-                                                        break;
-                                                    }
+                                                // This is an ON/OFF value
+                                                double data = new double();
+                                                data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
+                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                break;
                                             }
-                                            break;
-                                        }
-                                    case 1:
-                                        {
-                                            switch (datapoint.Mode)
+                                        case 1:
                                             {
-                                                case 0:
-                                                    {
-                                                        // This is an ON/OFF value
-                                                        break;
-                                                    }
-                                                case 1:
-                                                    {
-                                                        // This is the analogue voltage value
-                                                        break;
-                                                    }
-                                                case 2:
-                                                    {
-                                                        // This is a percentage value
-                                                        break;
-                                                    }
+                                                // This is the analogue voltage/current value
+                                                double data = new double();
+                                                data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
+                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                break;
                                             }
-                                            break;
-                                        }
+                                        case 2: // "FORCED"
+                                            {
+                                                // This is a percentage value
+                                                double data = new double();
+                                                data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
+                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                break;
+                                            }
+                                    }
                                 }
                                 break;
                             }
-                        case 26:    // Room-manager
-                            {
-                                break;
-                            }
-                        case 28:    // Communication Interface 
-                            {
-                                break;
-                            }
-                        case 72:    // Communication Interface USB
-                            {
-                                break;
-                            }
-                        case 53:    // Impulse input
-                            {
-                                break;
-                            }
-                        case 54:    // EMS
-                            {
-                                break;
-                            }
-                        case 55:    // E-Raditor Actuator
-                            {
-                                break;
-                            }
-                        case 62:    // MEP
-                            {
-                                break;
-                            }
-                        case 65:    // HRV
-                            {
-                                break;
-                            }
-                        case 68:    // Rosetta Sensor
-                            {
-                                break;
-                            }
-                        case 69:    // Rosetta Router
-                            {
-                                break;
-                            }
-                        case 71:    // Multi Channel Heating Actuator
-                            {
-                                break;
-                            }
-                        case 74:    // Switching Actuator New Generation / w Binary input / w EMS
-                            {
-                                break;
-                            }
-                        case 52:    // Router(no communication possible, just ignore it)
-                            {
-                                break;
-                            }
+                        //case 26:    // Room-manager
+                        //    {
+                        //        break;
+                        //    }
+                        //case 28:    // Communication Interface 
+                        //    {
+                        //        break;
+                        //    }
+                        //case 72:    // Communication Interface USB
+                        //    {
+                        //        break;
+                        //    }
+                        //case 53:    // Impulse input
+                        //    {
+                        //        break;
+                        //    }
+                        //case 54:    // EMS
+                        //    {
+                        //        break;
+                        //    }
+                        //case 55:    // E-Raditor Actuator
+                        //    {
+                        //        break;
+                        //    }
+                        //case 62:    // MEP
+                        //    {
+                        //        break;
+                        //    }
+                        //case 65:    // HRV
+                        //    {
+                        //        break;
+                        //    }
+                        //case 68:    // Rosetta Sensor
+                        //    {
+                        //        break;
+                        //    }
+                        //case 69:    // Rosetta Router
+                        //    {
+                        //        break;
+                        //    }
+                        //case 71:    // Multi Channel Heating Actuator
+                        //    {
+                        //        break;
+                        //    }
+                        //case 74:    // Switching Actuator New Generation / w Binary input / w EMS
+                        //    {
+                        //        break;
+                        //    }
+                        //case 52:    // Router(no communication possible, just ignore it)
+                        //    {
+                        //        break;
+                        //    }
                         default:    // Other stuff
                             {
+                                DoLog("Unhandled datapoint: " + datapoint.ToString(),4);
+                                BroadcastChange(0, "Unhandled datapoint: " + datapoint.ToString()); //Datapoint 0 is not a valid datapoint, but the MQTT doesn't care, so it's a nice channel to monitor.
                                 break;
                             }
                     }
