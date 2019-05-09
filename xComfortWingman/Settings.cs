@@ -39,6 +39,7 @@ namespace xComfortWingman
         public bool RAW_ENABLED { get; set; } = true;
         public int RMF_TIMEOUT { get; set; } = 5000;
         public bool DEBUGMODE { get; set; } = true;
+        public String DATAPOINTS_FILENAME { get; set; } = "datenpunkte.txt";
 
 
         // MQTT related settings
@@ -86,7 +87,7 @@ namespace xComfortWingman
 
         public Settings()
         {
-         
+         //Keeping this blank will return the defaults until anything else is changed.
         }
 
         public bool ResetToDefault()

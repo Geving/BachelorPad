@@ -6,15 +6,15 @@ using System.Threading.Tasks;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Protocol;
-using static xComfortWingman.Logger;
+using static xComfortWingman.MyLogger;
 
 namespace xComfortWingman
 {
     public class MQTT
     {
-        private IMqttClient mqttClient;
+        private static IMqttClient mqttClient;
 
-        public async Task RunMQTTClientAsync()
+        public static async Task RunMQTTClientAsync()
         {
             try
             {
@@ -89,19 +89,63 @@ namespace xComfortWingman
                             {
                                 try
                                 {
-                                    Program.SendDataToDP(Convert.ToInt32(topics[basePathLevels + 1]), Convert.ToInt32(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)));
+                                    await CI.SendData(Convert.ToInt32(topics[basePathLevels + 1]), Convert.ToInt32(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)));
                                 }
-                                catch (Exception ex)
+                                catch (Exception exception)
                                 {
-                                    DoLog(ex.Message, 5);
+                                    LogException(exception);
                                 }
 
                                 break;
                             }
                         case "get":
+                        case "set":
                             {
-                                break;
-                            }
+                                switch (topics[basePathLevels + 1])
+                                {
+                                    case "config":
+                                        {
+                                            if (topics[basePathLevels] == "get")
+                                            {
+                                                await SendMQTTMessageAsync($"BachelorPad/xComfort/{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", Program.Settings.GetSettingsAsJSON());
+                                            }
+                                            else
+                                            {
+                                                await SendMQTTMessageAsync($"BachelorPad/xComfort/{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", Program.Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
+                                            }
+                                            break;
+                                        }
+                                    case "datapoints":
+                                        {
+                                            if (topics[basePathLevels] == "get")
+                                            {
+                                                await SendMQTTMessageAsync($"BachelorPad/xComfort/{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", CI.GetDatapointFile());
+                                            }
+                                            else
+                                            {
+                                                await SendMQTTMessageAsync($"BachelorPad/xComfort/{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", CI.SetDatapointFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
+                                            }
+                                            break;
+                                        }
+                                    case "datapoint":
+                                        {
+                                            if (topics[basePathLevels] == "get")
+                                            {
+                                                //This makes no sense.
+                                            }
+                                            else
+                                            {
+                                                await SendMQTTMessageAsync($"BachelorPad/xComfort/{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", CI.ImportDatapointsOneByOne(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
+                                            }
+                                            break;
+                                        }
+                                    default:
+                                        {
+                                            break;
+                                        }
+                                }
+                            break;
+                        }   
                         case "RAW":
                             {
                                 //Because we only subscribe to RAW/in, we don't need to check topics[3]. It MUST be "in" to trigger this code.
@@ -116,32 +160,8 @@ namespace xComfortWingman
                                 }
                                 //if (payloadAsBytes[0] != 0x00) { payloadAsBytes = AddZeroAsFirstByte(payloadAsBytes); }
                                 //if (Settings.CONNECTION_MODE==CI_CONNECTION_MODE.RS232_MODE) { payloadAsBytes = AddRS232Bytes(payloadAsBytes); }
-                                Program.PrintByte(payloadAsBytes, "Sending RAW data");
-                                Program.SendThenBlockTransmit(payloadAsBytes); //Send this to the interface for immediate transmit
-                                break;
-                            }
-                        case "config":
-                            {
-                                switch (topics[basePathLevels + 1])
-                                {
-                                    case "loadsettings":
-                                    case "getsettings":
-                                        {
-                                            await SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Program.Settings.GetSettingsAsJSON());
-                                            break;
-                                        }
-                                    case "savesettings":
-                                    case "setsettings":
-                                        {
-                                            await SendMQTTMessageAsync("BachelorPad/xComfort/config/" + topics[basePathLevels + 1] + "/result", Program.Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString());
-                                            break;
-                                        }
-                                    default:
-                                        {
-                                            DoLog($"Unknown config request: {topics[basePathLevels + 1]}");
-                                            break;
-                                        }
-                                }
+                                CI.PrintByte(payloadAsBytes, "Sending RAW data");
+                                await CI.SendData(payloadAsBytes); //Send this to the interface for immediate transmit
                                 break;
                             }
                         default:
@@ -160,15 +180,12 @@ namespace xComfortWingman
                         // Subscribe to a topic
                         await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/cmd/#").Build());
                         await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/in").Build());
-                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/").Build());
-                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/getsettings").Build());
-                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/setsettings").Build());
-                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/loadsettings").Build());
-                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/config/savesettings").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/get/#").Build());
+                        await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/set/#").Build());
                         //await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic("BachelorPad/xComfort/RAW/out").Build()); // We don't need to subscribe to our own outbound messages...
                     } catch (Exception exception)
                     {
-                        DoLog(exception.Message, 4);
+                        LogException(exception);
                     }
                 };
 
@@ -193,7 +210,7 @@ namespace xComfortWingman
                     {
                         DoLog("Reconnecting to MQTT server...", false);
                         DoLog("ERROR", 3, true, 12);
-                        DoLog(exception.Message, 4);
+                        LogException(exception);
                     }
                 };
 
@@ -218,16 +235,16 @@ namespace xComfortWingman
                 catch (Exception exception)
                 {
                     DoLog("ERROR", 3, true, 12);
-                    DoLog("Connection failed!" + Environment.NewLine + exception);
+                    LogException(exception);
                 }
             }
             catch (Exception ex)
             {
-                DoLog(ex.Message, 5);
+                LogException(ex);
             }
             return;
         }
-        public async Task SendMQTTMessageAsync(string topic, string payload)
+        public static async Task SendMQTTMessageAsync(string topic, string payload)
         {
             if (mqttClient.IsConnected)
             {
@@ -262,7 +279,7 @@ namespace xComfortWingman
                 }
                 catch (Exception exception)
                 {
-                    DoLog(exception.Message, 5);
+                    LogException(exception);
                 }
 
             } else

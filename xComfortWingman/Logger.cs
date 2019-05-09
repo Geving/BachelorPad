@@ -1,11 +1,13 @@
 ﻿using System;
+using NLog;
 using System.Collections.Generic;
 using System.Text;
 
 namespace xComfortWingman
 {
-    public class Logger
+    public class MyLogger
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
 
         public static void DoLog(String text, int level, bool newline)
         {
@@ -112,5 +114,10 @@ namespace xComfortWingman
             }
         }
 
+        public static void LogException(Exception exception)
+        {
+            DoLog(exception.Message, 5);
+            logger.Error(exception);
+        }
     }
 }
