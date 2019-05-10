@@ -16,6 +16,8 @@ namespace xComfortWingman
 {
     public class MQTT
     {
+        
+
         private static IMqttClient mqttClient;
 
         public static async Task RunMQTTClientAsync()
@@ -294,117 +296,213 @@ namespace xComfortWingman
 
         public static void Testing()
         {
-            MakeDeviceAttributes();
+            Homie.CreateAndListNodes();
+            //foreach (PublishModel pm in MakeDeviceAttributes())
+            //{
+            //    Console.WriteLine($"{pm.PublishPath}  -->  {pm.Payload}");
+            //}
         }
 
-        private static string MakeDeviceAttributes()
+        private static List<PublishModel> MakeDeviceAttributes()
         {
-            /*
-            homie/super-car/$homie → "2.1.0"
-            homie/super-car/$name → "Super car"
-            homie/super-car/$localip → "192.168.0.10"
-            homie/super-car/$mac → "DE:AD:BE:EF:FE:ED"
-            homie/super-car/$fw/name → "weatherstation-firmware"
-            homie/super-car/$fw/version → "1.0.0"
-            homie/super-car/$nodes → "wheels,engine,lights[]"
-            homie/super-car/$implementation → "esp8266"
-            homie/super-car/$stats/interval → "60"
-            homie/super-car/$state → "ready"
-            */
             NetworkInterface networkInterface = NetworkInterface.GetAllNetworkInterfaces().Where(nic => nic.OperationalStatus == OperationalStatus.Up).FirstOrDefault();
             string myIP = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0].ToString();          
 
             String BaseTopic = (Program.Settings.MQTT_BASETOPIC + "/" + Program.Settings.NAME + "/").Replace("//","/");
-            Dictionary<string, string> attributes = new Dictionary<string, string>
+            //Dictionary<string, string> attributes = new Dictionary<string, string>
+            List<PublishModel> attributes = new List<PublishModel>
             {
-                { $"{BaseTopic}$homie", Program.Settings.MQTT_HOMIE_HOMIE },
-                { $"{BaseTopic}$name", Program.Settings.MQTT_HOMIE_NAME },
-                { $"{BaseTopic}$localip", myIP },
-                { $"{BaseTopic}$mac", networkInterface.GetPhysicalAddress().ToString()},
-                { $"{BaseTopic}$fw/name", Program.Settings.MQTT_HOMIE_FW_NAME},
-                { $"{BaseTopic}$fw/version", Program.Settings.MQTT_HOMIE_FW_VERSION },
-                { $"{BaseTopic}$nodes",  GetNodes()},
-                { $"{BaseTopic}$implementation", Program.Settings.MQTT_HOMIE_IMPLEMENTATION },
-                { $"{BaseTopic}$stats/interval", Program.Settings.MQTT_HOMIE_STATS_INTERVAL },
-                { $"{BaseTopic}$state", "ready" }
+                new PublishModel($"{BaseTopic}$homie", Program.Settings.MQTT_HOMIE_HOMIE ),                     //homie/super-car/$homie → "2.1.0"
+                new PublishModel($"{BaseTopic}$name", Program.Settings.MQTT_HOMIE_NAME ),                       //homie/super-car/$name → "Super car"
+                new PublishModel($"{BaseTopic}$localip", myIP ),                                                //homie/super-car/$localip → "192.168.0.10"
+                new PublishModel($"{BaseTopic}$mac", networkInterface.GetPhysicalAddress().ToString()),         //homie/super-car/$mac → "DE:AD:BE:EF:FE:ED"
+                new PublishModel($"{BaseTopic}$fw/name", Program.Settings.MQTT_HOMIE_FW_NAME),                  //homie/super-car/$fw/name → "weatherstation-firmware"
+                new PublishModel($"{BaseTopic}$fw/version", Program.Settings.MQTT_HOMIE_FW_VERSION ),           //homie/super-car/$fw/version → "1.0.0"
+                new PublishModel($"{BaseTopic}$nodes", GetNodeList()),                                          //homie/super-car/$nodes → "wheels,engine,lights[]"
+                new PublishModel($"{BaseTopic}$implementation", Program.Settings.MQTT_HOMIE_IMPLEMENTATION ),   //homie/super-car/$implementation → "esp8266"
+                new PublishModel($"{BaseTopic}$stats/interval", Program.Settings.MQTT_HOMIE_STATS_INTERVAL ),   //homie/super-car/$stats/interval → "60"
+                new PublishModel($"{BaseTopic}$state", "ready" )                                                //homie/super-car/$state → "ready"
             };
 
-            return "";
+            return attributes;
         }
 
-        private static string GetNodes()
+        public async static Task SendInitialData()
+        {
+            try
+            {
+                foreach (PublishModel publishModel in MakeDeviceAttributes())
+                {
+                    await SendMQTTMessageAsync(publishModel.PublishPath, publishModel.Payload);
+                }
+                Homie.CreateAndListNodes();
+                await SendNodeDataToServer();
+                //return true;
+            } catch (Exception exception)
+            {
+                MyLogger.LogException(exception);
+                //return false;
+            }
+        }
+
+        private static string GetNodeList()
         {
             /* There's going to be one node for every device type in use:
-             * Dimmable actuators, switching actuators, push buttons, room controllers, etc
-             * These will then be arrays where each datapoint is an item. */
-
-            //$name Device → Controller Friendly name of the Node   Yes Yes
-            //$type Device → Controller Type of the node Yes Yes
-            //$properties Device → Controller Properties the node exposes, with format id separated by a, if there are multiple nodes.Yes Yes
-            //$array Device → Controller Range separated by a -.e.g. 0 - 2 for an array with the indexes 0, 1 and 2
-            Dictionary<string, string> nodes = new Dictionary<string, string>();
+            * Dimmable actuators, switching actuators, push buttons, room controllers, etc
+            * These will then be arrays where each datapoint is an item. */
+            string nodes = "";
             List<DeviceType> activeTypes = new List<DeviceType>();
             foreach (Datapoint dp in CI.datapoints)
             {
                 // Get the device type, add it to the list of active types (if it's not allready there)
-                DeviceType devicetype = CI.devicetypes.Find(x => x.Number == dp.Type && x.Channels.Contains(dp.Channel) && x.Modes.Contains(dp.Mode));
-                if (!activeTypes.Contains(devicetype))
-                {
-                    activeTypes.Add(devicetype);
-                }
+                DeviceType devicetype = CI.devicetypes.Find(x => x.Number == dp.Type);
+                if (!(devicetype != null && devicetype.Channels.Contains(dp.Channel) && devicetype.Modes.Contains(dp.Mode))) { continue; }
+                if (!activeTypes.Contains(devicetype)) { activeTypes.Add(devicetype); }
             }
+
             foreach (DeviceType devType in activeTypes)
             {
-                // Make a list for this type, fill it with all datapoints of that type.
-                List<Datapoint> dps = new List<Datapoint>();
-                dps.AddRange(CI.datapoints.Where(x => x.Type == devType.Number && devType.Modes.Contains(x.Mode) && devType.Channels.Contains(x.Channel)));
+                nodes += $"{ Homie.GetSafeNameForDeviceType(devType.Number) }[],";
+            }
+            return nodes;
+        }
 
-                // This list now contains all the array items for the node(device type)
-                
-                //                                      homie          /       supercar        /    lights    /
-                String BaseTopic = ($"{Program.Settings.MQTT_BASETOPIC}/{Program.Settings.NAME}/{devType.GetSafeName()}").Replace("//", "/");
-                nodes.Add($"{BaseTopic}$name", devType.Name);
-                nodes.Add($"{BaseTopic}$type", devType.GetSafeName());
+        //private static string GetNodes()
+        //{
+        //    /* There's going to be one node for every device type in use:
+        //     * Dimmable actuators, switching actuators, push buttons, room controllers, etc
+        //     * These will then be arrays where each datapoint is an item. */
+        //    string nodes = "";
+        //    List<PublishModel> pubList = new List<PublishModel>();
+        //    List<DeviceType> activeTypes = new List<DeviceType>();
+        //    foreach (Datapoint dp in CI.datapoints)
+        //    {
+        //        // Get the device type, add it to the list of active types (if it's not allready there)
+        //        DeviceType devicetype = CI.devicetypes.Find(x => x.Number == dp.Type);
+        //        if (!(devicetype != null && devicetype.Channels.Contains(dp.Channel) && devicetype.Modes.Contains(dp.Mode))) { continue; }
+        //        if (!activeTypes.Contains(devicetype)) { activeTypes.Add(devicetype); }
+        //    }
 
-                string[] props = devType.GetProperties();
-                string concatProp = "";
-                foreach (string p in props)
-                {
-                    concatProp += (p + ",");
-                }
-                nodes.Add($"{BaseTopic}$properties", concatProp.Remove(concatProp.Length-1));
+        //    foreach (DeviceType devType in activeTypes)
+        //    {
+        //        // Setting up the base topic string:     homie          /       supercar        / lights /
+        //        string devName = Homie.GetSafeNameForDeviceType(devType.Number);
+        //        string basebase = ($"{Program.Settings.MQTT_BASETOPIC}/{Program.Settings.NAME}").Replace("//", "/");
+        //        string BaseTopic = ($"{basebase}/{devName}").Replace("//", "/");
+
+        //        // Add it to the list of node names.
+        //        pubList.Add(new PublishModel($"{basebase}/$nodes", $"{devName}[]"));                                            //homie/super-car/$nodes → "lights[]"
+        //        nodes += $"{ devName }[],";
+
+        //        // Get all datapoints that belong to this specific devicetype
+        //        List<Datapoint> dps = new List<Datapoint>();
+        //        dps.AddRange(CI.datapoints.Where(x => x.Type == devType.Number 
+        //            && devType.Modes.Contains(x.Mode) 
+        //            && devType.Channels.Contains(x.Channel)
+        //            ));
+
+        //        string devProps = Homie.GetPropertiesForDeviceType(devType);
+        //        // Add basic info about the node
+        //        pubList.Add(new PublishModel($"{BaseTopic}/$name", devName));                                                    //homie/super-car/lights/$name → "Lights"
+        //        pubList.Add(new PublishModel($"{BaseTopic}/$properties", devProps));                                             //homie/super-car/lights/$properties → "intensity"
+        //        pubList.Add(new PublishModel($"{BaseTopic}/$array", $"0-{dps.Count-1}"));                                        //homie/super-car/lights/$array → "0-1"
+
+        //        foreach (string p in devProps.Replace("[]", "").Split(","))
+        //        {
+        //            // Each and every property must have their own set of MQTT messsages
+        //            pubList.AddRange(Homie.PropertyDetails(devName, BaseTopic + "/" + p));
+        //            //                                                                                                          //homie/super-car/lights/intensity/$name → "Intensity"
+        //            //                                                                                                          //homie/super-car/lights/intensity/$settable → "true"
+        //            //                                                                                                          //homie/super-car/lights/intensity/$unit → "%"
+        //            //                                                                                                          //homie/super-car/lights/intensity/$datatype → "integer"
+        //            //                                                                                                          //homie/super-car/lights/intensity/$format → "0:100"
+                    
+        //            int devCnt = 0;
+        //            foreach (Datapoint datapoint in dps)
+        //            {
+        //                string dataAsString = "0";
+        //                Protocol.PT_RX.Packet pT_RX = datapoint.LatestDataValues;
+        //                if (datapoint.LatestDataValues != null)
+        //                {
+        //                    dataAsString = CI.GetDataFromPacket(pT_RX.MGW_RX_DATA, pT_RX.MGW_RX_DATA_TYPE, p);
+        //                }
+        //                pubList.Add(new PublishModel($"{BaseTopic}{devName}_{devCnt}/$name", datapoint.Name));                  //homie/super-car/lights_0/$name → "Back lights"
+        //                pubList.Add(new PublishModel($"{BaseTopic}{devName}_{devCnt}/{p}", dataAsString));                      //homie/super-car/lights_0/intensity → "0"
+        //                devCnt++;
+        //            }
+        //        }
+
+        //        //foreach (PublishModel item in pubList)
+        //        //{
+        //        //    Console.WriteLine(item.PublishPath + "  -->  " + item.Payload);
+        //        //}               
+        //    }
+        //    return nodes;
+        //}
+
+        private static async Task SendNodeDataToServer()
+        {
+            foreach (Homie.Node node in Homie.HomieNodes)
+            {
+                await SendMQTTMessageAsync($"{node.PublishPath}$name",$"{node.Name}");
+                await SendMQTTMessageAsync($"{node.PublishPath}$properties", $"{node.Properties}");
+                await SendMQTTMessageAsync($"{node.PublishPath}$array",$"{node.Array}");
             }
 
+            foreach (Homie.Property node in Homie.HomieProperties)
+            {
+                await SendMQTTMessageAsync($"{node.PublishPath}$name",$"{node.Name}");
+                await SendMQTTMessageAsync($"{node.PublishPath}$settable",$"{node.Settable}");
+                await SendMQTTMessageAsync($"{node.PublishPath}$unit",$"{node.Unit}");
+                await SendMQTTMessageAsync($"{node.PublishPath}$datatype",$"{node.DataType}");
+                await SendMQTTMessageAsync($"{node.PublishPath}$format",$"{node.Format}");
+                await SendMQTTMessageAsync($"{node.PublishPath}$unit",$"{node.Unit}");
+            }
 
-
-            //Dictionary<string, string> node = new Dictionary<string, string>
-            //{
-            //    { $"{BaseTopic}$name", dp.Name },
-            //    { $"{BaseTopic}$type", devicetype.Name },
-            //    { $"{BaseTopic}$properties", devicetype.MessageTypes.ToString() },
-            //    //{ $"{BaseTopic}$array",  },
-            //};
-
-            return "x";
-
-                //homie/super-car/$nodes → "lights[]"
-
-                //homie/super-car/lights/$name → "Lights"
-                //homie/super-car/lights/$properties → "intensity"
-                //homie/super-car/lights/$array → "0-1"
-
-                //homie/super-car/lights/intensity/$name → "Intensity"
-                //homie/super-car/lights/intensity/$settable → "true"
-                //homie/super-car/lights/intensity/$unit → "%"
-                //homie/super-car/lights/intensity/$datatype → "integer"
-                //homie/super-car/lights/intensity/$format → "0:100"
-
-                //homie/super-car/lights_0/$name → "Back lights"
-                //homie/super-car/lights_0/intensity → "0"
-                //homie/super-car/lights_1/$name → "Front lights"
-                //homie/super-car/lights_1/intensity → "100"
-
+            foreach (Homie.ArrayElement node in Homie.HomieArrayElements)
+            {
+                await SendMQTTMessageAsync($"{node.PublishPath}/$name",$"{node.Name}");
+                await SendMQTTMessageAsync($"{node.PublishPath}/${node.PropertyName}",$"{node.Value}");
+            }
         }
+
+        private static List<PublishModel> GetAllNodesAsPublication(string node)
+        {
+            List<PublishModel> pubList = new List<PublishModel>();
+            List<DeviceType> activeTypes = new List<DeviceType>();
+            foreach (Datapoint dp in CI.datapoints)
+            {
+                // Get the device type, add it to the list of active types (if it's not allready there)
+                DeviceType devicetype = CI.devicetypes.Find(x => x.Number == dp.Type);
+                if (!(devicetype != null && devicetype.Channels.Contains(dp.Channel) && devicetype.Modes.Contains(dp.Mode))) { continue; }
+                if (!activeTypes.Contains(devicetype)) { activeTypes.Add(devicetype); }
+            }
+
+            foreach (DeviceType devType in activeTypes)
+            {
+                // Setting up the base topic string:     homie          /       supercar        / lights /
+                string devName = Homie.GetSafeNameForDeviceType(devType.Number);
+                string basebase = ($"{Program.Settings.MQTT_BASETOPIC}/{Program.Settings.NAME}").Replace("//", "/");
+                string BaseTopic = ($"{basebase}/{devName}").Replace("//", "/");
+
+                // Add it to the list of node names.
+                pubList.Add(new PublishModel($"{basebase}/$nodes", $"{devName}[]"));                                            //homie/super-car/$nodes → "lights[]"
+            }
+            return pubList;
+        }
+
+        //private static List<PublishModel> GetPublicationsForNode(string node)
+        //{
+
+        //    // Setting up the base topic string:     homie          /       supercar        / lights /
+        //    string devName = Homie.GetSafeNameForDeviceType(devType.Number);
+        //    string basebase = ($"{Program.Settings.MQTT_BASETOPIC}/{Program.Settings.NAME}").Replace("//", "/");
+        //    string BaseTopic = ($"{basebase}/{devName}").Replace("//", "/");
+
+        //    // Add it to the list of node names.
+        //    pubList.Add(new PublishModel($"{basebase}/$nodes", $"{devName}[]"));                                            //homie/super-car/$nodes → "lights[]"
+
+        //}
 
         private void SendStats()
         {

@@ -51,9 +51,12 @@ namespace xComfortWingman
             CI.ImportDatapointsFromFile("C:\\Misc\\Datenpunkte.txt");
             //CI.ImportDatapointsFromFile("Datenpunkte.txt");
 
-            MQTT.Testing();
-            //MQTT.RunMQTTClientAsync().Wait();
+            
+            MQTT.RunMQTTClientAsync().Wait();
             //CI.ConnectToCI().Wait();
+            MQTT.Testing();
+
+            
 
             DoLog("Startup complete!",4);
 

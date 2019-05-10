@@ -26,17 +26,17 @@ namespace xComfortWingman
         static HidStream myHidStream;
         private static bool readyToTransmit;
         private static List<byte> receivedData = new List<byte>();
-        static readonly DeviceTypeList dtl = new DeviceTypeList();
+        //static readonly DeviceTypeList dtl = new DeviceTypeList();
         private static bool acceptingData = false;
 
         public static List<Datapoint> datapoints=new List<Datapoint>();
-        public static List<DeviceType> devicetypes = dtl.ListDeviceTypes();
+        //public static List<DeviceType> devicetypes = dtl.ListDeviceTypes();
 
         public static byte sequenceCounter = 0x00;
         public static byte[][] messageHistory = new byte[15][];
-        readonly List<DeviceType> allDeviceTypes = new List<DeviceType>
+        public static readonly List<DeviceType> devicetypes = new List<DeviceType>
             {
-            //                 ID   Name                        ShortName       Number          Channels    Modes                       MessageTypes
+            //                 ID   Name                        ShortName       Number            Channels                    Modes                        MessageTypes
                 new DeviceType(1, "push-button single",             "PB",       (1),    new int[] { 0 },            new int[] { 0 },            new byte[] { MGW_RMT_ON, MGW_RMT_OFF, MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_DOWN_PRESSED, MGW_RMT_DOWN_RELEASED }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"),
                 new DeviceType(2, "push-button dual",               "PB",       (2),    new int[] { 0, 1 },         new int[] { 0 },            new byte[] { MGW_RMT_ON, MGW_RMT_OFF, MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_DOWN_PRESSED, MGW_RMT_DOWN_RELEASED }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"),
                 new DeviceType(3, "push-button quad",               "PB",       (3),    new int[] { 0, 1, 2, 3 },   new int[] { 0 },            new byte[] { MGW_RMT_ON, MGW_RMT_OFF, MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_DOWN_PRESSED, MGW_RMT_DOWN_RELEASED }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"),
@@ -1465,7 +1465,7 @@ namespace xComfortWingman
             return 0;
         }
 
-        static string GetDataFromPacket(byte[] mgw_rx_data, byte mgw_rx_data_type, string data)
+        public static string GetDataFromPacket(byte[] mgw_rx_data, byte mgw_rx_data_type, string data)
         {
             switch (mgw_rx_data_type)
             {
@@ -1540,10 +1540,11 @@ namespace xComfortWingman
                 case MGW_RDT_RC_DATA: // 4 bytes(only with room controller) : two values, first temperature, then adjustment wheel
                     {
                         double[] values = new double[2];
-                        values[0] = BitConverter.ToUInt16(mgw_rx_data, 0);
+                        values[0] = BitConverter.ToInt16(mgw_rx_data, 0);
                         values[0] = values[0] / 10;
 
-                        values[1] = BitConverter.ToUInt16(mgw_rx_data, 2);
+                        values[1] = BitConverter.ToInt16(mgw_rx_data, 2);
+                        values[1] = values[1] / 10;
 
                         return values[0].ToString() + ";" + values[1].ToString();
                     }
@@ -1566,8 +1567,9 @@ namespace xComfortWingman
                         //Return the data as a ISO 8601 formatted string
                         return mgw_rx_data[2].ToString("00") + mgw_rx_data[3].ToString("00") + "-" + month.ToString("00") + "-" + mgw_rx_data[0].ToString("00");
                     }
+                default:
+                    { return "Unhandled datatype! Sorry!"; }
             }
-            return "Nothing";
         }
 
         public static void PrintByte(byte[] bytesToPrint, string caption, bool minimalistic) // Used for printing byte arrays as HEX values with spaces between. Makes reading much easier!
