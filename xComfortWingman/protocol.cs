@@ -1,4 +1,6 @@
-﻿namespace xComfortWingman.Protocol
+﻿using System.Collections.Generic;
+
+namespace xComfortWingman.Protocol
 {
     public static class PREDEFINED
     {
@@ -27,7 +29,7 @@
         public const byte MGW_PT_STATUS = 0xC3;
     }
 
-    public  class PT_TX
+    public class PT_TX
     {
         public class MGW_TX_EVENT 
         {
@@ -269,6 +271,56 @@
             public const byte MGW_RMT_TOO_WARM = 0x64;        // "Warm"
             public const byte MGW_RMT_STATUS = 0x70;          // Data contains Info about current Status
             public const byte MGW_RMT_BASIC_MODE = 0x80;      // Confirmation: Assigned or Removed RF-Device
+
+            public static string GetNameFromByte(byte type)
+            {
+                Dictionary<int, string> dict = new Dictionary<int, string>
+                {
+                    { 0x50, "'On'" },
+                    { 0x51, "'Off'" },
+                    { 0x52, "'On'" },
+                    { 0x53, "'Off'" },
+                    { 0x54, "'Up' is pressed" },
+                    { 0x55, "'Up' is released" },
+                    { 0x56, "'Down' is pressed" },
+                    { 0x57, "'Down' is released" },
+                    { 0x5A, "Fixed value" },
+                    { 0x5B, "Single contact" },
+                    { 0x62, "Analogue value" },
+                    { 0x63, "'Cold'" },
+                    { 0x64, "'Warm'" },
+                    { 0x70, "Data contains Info about current Status" },
+                    { 0x80, "Confirmation: Assigned or Removed RF-Device" }
+                };
+
+                dict.TryGetValue(System.Convert.ToInt32(type), out string tmp);
+                return tmp;
+            }
+
+            public static string GetTechnicalNameFromByte(byte type)
+            {
+                Dictionary<int, string> dict = new Dictionary<int, string>
+                {
+                    { 0x50, "MGW_RMT_ON" },
+                    { 0x51, "MGW_RMT_OFF" },
+                    { 0x52, "MGW_RMT_SWITCH_ON" },
+                    { 0x53, "MGW_RMT_SWITCH_OFF" },
+                    { 0x54, "MGW_RMT_UP_PRESSED" },
+                    { 0x55, "MGW_RMT_UP_RELEASED" },
+                    { 0x56, "MGW_RMT_DOWN_PRESSED" },
+                    { 0x57, "MGW_RMT_DOWN_RELEASED" },
+                    { 0x5A, "MGW_RMT_FORCED" },
+                    { 0x5B, "MGW_RMT_SINGLE_ON" },
+                    { 0x62, "MGW_RMT_VALUE" },
+                    { 0x63, "MGW_RMT_TOO_COLD" },
+                    { 0x64, "MGW_RMT_TOO_WARM" },
+                    { 0x70, "MGW_RMT_STATUS" },
+                    { 0x80, "MGW_RMT_BASIC_MODE" },
+                };
+
+                dict.TryGetValue(System.Convert.ToInt32(type), out string tmp);
+                return tmp;
+            }
         }
 
         public static class MGW_RX_DATA_TYPE
@@ -299,6 +351,85 @@
                                                         //      2nd: Valve position(0% to 100%)
                                                         //      3rd, Bitmask rrrr tttt: rrrr: Request index; tttt: bit 11 to 8 of HRV-Temperature
                                                         //      4th: bit 7 to 0 of HRV-Temperature        
+            public static string GetNameFromByte(byte type)
+            {
+                Dictionary<int, string> dict = new Dictionary<int, string>
+                {
+                    { 0x00, "MGW_RDT_NO_DATA" },
+                    { 0x01, "MGW_RDT_PERCENT" },
+                    { 0x02, "MGW_RDT_UINT8" },
+                    { 0x03, "MGW_RDT_INT16_1POINT" },
+                    { 0x04, "MGW_RDT_FLOAT" },
+                    { 0x0D, "MGW_RDT_UINT16" },
+                    { 0x21, "MGW_RDT_UINT16_1POINT" },
+                    { 0x22, "MGW_RDT_UINT16_2POINT" },
+                    { 0x23, "MGW_RDT_UINT16_3POINT" },
+                    { 0x0E, "MGW_RDT_UINT32" },
+                    { 0x0F, "MGW_RDT_UINT32_1POINT" },
+                    { 0x10, "MGW_RDT_UINT32_2POINT" },
+                    { 0x11, "MGW_RDT_UINT32_3POINT" },
+                    { 0x17, "MGW_RDT_RC_DATA" },
+                    { 0x1E, "MGW_RDT_TIME" },
+                    { 0x1F, "MGW_RDT_DATE" },
+                    { 0x35, "MGW_RDT_ROSETTA" }
+                };
+
+                dict.TryGetValue(System.Convert.ToInt32(type), out string tmp);
+                return tmp;
+            }
+            public static string GetCommonNameFromByte(byte type)
+            {
+                Dictionary<int, string> dict = new Dictionary<int, string>
+                {                       //integer, float, boolean, string, enum, color
+                    { 0x00, "nothing" },
+                    { 0x01, "percent" },
+                    { 0x02, "integer" },
+                    { 0x03, "decimal" },
+                    { 0x04, "float" },
+                    { 0x0D, "integer" },
+                    { 0x21, "decimal" },
+                    { 0x22, "decimal" },
+                    { 0x23, "decimal" },
+                    { 0x0E, "integer" },
+                    { 0x0F, "decimal" },
+                    { 0x10, "decimal" },
+                    { 0x11, "decimal" },
+                    { 0x17, "integer" },
+                    { 0x1E, "time" },
+                    { 0x1F, "date" },
+                    { 0x35, "rosetta" }
+                };
+
+                dict.TryGetValue(System.Convert.ToInt32(type), out string tmp);
+                return tmp;
+            }
+
+            public static string GetHomieNameFromByte(byte type)
+            {
+                Dictionary<int, string> dict = new Dictionary<int, string>
+                {                       //integer, float, boolean, string, enum, color
+                    { 0x00, "string" },
+                    { 0x01, "integer" },
+                    { 0x02, "integer" },
+                    { 0x03, "float" },
+                    { 0x04, "float" },
+                    { 0x0D, "integer" },
+                    { 0x21, "float" },
+                    { 0x22, "float" },
+                    { 0x23, "float" },
+                    { 0x0E, "integer" },
+                    { 0x0F, "float" },
+                    { 0x10, "float" },
+                    { 0x11, "float" },
+                    { 0x17, "integer" },
+                    { 0x1E, "string" },
+                    { 0x1F, "string" },
+                    { 0x35, "string" }
+                };
+
+                dict.TryGetValue(System.Convert.ToInt32(type), out string tmp);
+                return tmp;
+            }
         }
 
         public static class MGW_RX_INFO_SHORT

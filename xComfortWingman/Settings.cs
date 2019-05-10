@@ -40,7 +40,7 @@ namespace xComfortWingman
         public int RMF_TIMEOUT { get; set; } = 5000;
         public bool DEBUGMODE { get; set; } = true;
         public String DATAPOINTS_FILENAME { get; set; } = "datenpunkte.txt";
-
+        public String NAME { get; set; } = "BachelorPad";
 
         // MQTT related settings
         public MQTT_CONNECTION_MODE MQTT_CONNECTION_MODE { get; set; } = MQTT_CONNECTION_MODE.TCP;
@@ -51,8 +51,20 @@ namespace xComfortWingman
         public string MQTT_CRED_PASSWORD { get; set; } = "";
         public bool MQTT_USE_TLS { get; set; } = false;
         public bool MQTT_CLEAN_SESSION { get; set; } = false;
-        public string MQTT_BASEPATH { get; set; } = "BachelorPad/xComfort";
+        public string MQTT_BASETOPIC { get; set; } = "BachelorPad/xComfort";
         public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/#/be/subscribed/to" };
+
+        // MQTT HOMIE related
+        public string MQTT_HOMIE_HOMIE { get; set; } = "3.0"; //{ $"{BaseTopic}$homie", "3.0" },
+        public string MQTT_HOMIE_NAME { get; set; } = "BachelorPad";    //{ $"{BaseTopic}$name", "3.0" },
+        //public string MQTT_HOMIE_LOCALIP { get; set; }                //{ $"{BaseTopic}$localip", "3.0" },
+        //public string MQTT_HOMIE_MAC { get; set; }                    //{ $"{BaseTopic}$mac", "3.0" },
+        public string MQTT_HOMIE_FW_NAME { get; set; } = "FW";          //{ $"{BaseTopic}$fw/name", "3.0" },
+        public string MQTT_HOMIE_FW_VERSION { get; set; } = "1.0";      //{ $"{BaseTopic}$fw/version", "3.0" },
+        //public string MQTT_HOMIE_NODES { get; set; }                  //{ $"{BaseTopic}$nodes", "3.0" },
+        public string MQTT_HOMIE_IMPLEMENTATION { get; set; } = "RPi3"; //{ $"{BaseTopic}$implementation", "raspberry" },
+        public string MQTT_HOMIE_STATS_INTERVAL { get; set; } = "60";   //{ $"{BaseTopic}$stats/interval", "60" },
+        //public string MQTT_HOMIE_STATE { get; set; }                  //{ $"{BaseTopic}$state", "ready" }
 
 
         // Communication Interface related settings
@@ -109,7 +121,7 @@ namespace xComfortWingman
             MQTT_CRED_PASSWORD = settings.MQTT_CRED_PASSWORD;
             MQTT_USE_TLS = settings.MQTT_USE_TLS;
             MQTT_CLEAN_SESSION = settings.MQTT_CLEAN_SESSION;
-            MQTT_BASEPATH = settings.MQTT_BASEPATH;
+            MQTT_BASETOPIC = settings.MQTT_BASETOPIC;
             MQTT_EXTRA_SUBS = settings.MQTT_EXTRA_SUBS;
             CONNECTION_MODE = settings.CONNECTION_MODE;
             INTERFACE_INIT_COMMANDS = settings.INTERFACE_INIT_COMMANDS;

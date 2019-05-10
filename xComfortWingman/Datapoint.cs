@@ -4,7 +4,7 @@ using System.Text;
 
 namespace xComfortWingman
 {
-    class Datapoint : IEquatable<Datapoint>
+    public class Datapoint : IEquatable<Datapoint>
     {
         /*
          Example data point file:

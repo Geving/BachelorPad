@@ -1,12 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Protocol;
+using System.Net.NetworkInformation;
 using static xComfortWingman.MyLogger;
+using System.Net;
 
 namespace xComfortWingman
 {
@@ -77,7 +81,7 @@ namespace xComfortWingman
                 mqttClient.ApplicationMessageReceived += async (s, e) =>
                 {
                     string[] topics = e.ApplicationMessage.Topic.Split("/");
-                    int basePathLevels = settings.MQTT_BASEPATH.Split("/").Length;
+                    int basePathLevels = settings.MQTT_BASETOPIC.Split("/").Length;
                     if (topics.Length < basePathLevels + 1)
                     {
                         DoLog("Invalid topic path!");
@@ -288,6 +292,186 @@ namespace xComfortWingman
             }
         }
 
+        public static void Testing()
+        {
+            MakeDeviceAttributes();
+        }
+
+        private static string MakeDeviceAttributes()
+        {
+            /*
+            homie/super-car/$homie → "2.1.0"
+            homie/super-car/$name → "Super car"
+            homie/super-car/$localip → "192.168.0.10"
+            homie/super-car/$mac → "DE:AD:BE:EF:FE:ED"
+            homie/super-car/$fw/name → "weatherstation-firmware"
+            homie/super-car/$fw/version → "1.0.0"
+            homie/super-car/$nodes → "wheels,engine,lights[]"
+            homie/super-car/$implementation → "esp8266"
+            homie/super-car/$stats/interval → "60"
+            homie/super-car/$state → "ready"
+            */
+            NetworkInterface networkInterface = NetworkInterface.GetAllNetworkInterfaces().Where(nic => nic.OperationalStatus == OperationalStatus.Up).FirstOrDefault();
+            string myIP = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0].ToString();          
+
+            String BaseTopic = (Program.Settings.MQTT_BASETOPIC + "/" + Program.Settings.NAME + "/").Replace("//","/");
+            Dictionary<string, string> attributes = new Dictionary<string, string>
+            {
+                { $"{BaseTopic}$homie", Program.Settings.MQTT_HOMIE_HOMIE },
+                { $"{BaseTopic}$name", Program.Settings.MQTT_HOMIE_NAME },
+                { $"{BaseTopic}$localip", myIP },
+                { $"{BaseTopic}$mac", networkInterface.GetPhysicalAddress().ToString()},
+                { $"{BaseTopic}$fw/name", Program.Settings.MQTT_HOMIE_FW_NAME},
+                { $"{BaseTopic}$fw/version", Program.Settings.MQTT_HOMIE_FW_VERSION },
+                { $"{BaseTopic}$nodes",  GetNodes()},
+                { $"{BaseTopic}$implementation", Program.Settings.MQTT_HOMIE_IMPLEMENTATION },
+                { $"{BaseTopic}$stats/interval", Program.Settings.MQTT_HOMIE_STATS_INTERVAL },
+                { $"{BaseTopic}$state", "ready" }
+            };
+
+            return "";
+        }
+
+        private static string GetNodes()
+        {
+            /* There's going to be one node for every device type in use:
+             * Dimmable actuators, switching actuators, push buttons, room controllers, etc
+             * These will then be arrays where each datapoint is an item. */
+
+            //$name Device → Controller Friendly name of the Node   Yes Yes
+            //$type Device → Controller Type of the node Yes Yes
+            //$properties Device → Controller Properties the node exposes, with format id separated by a, if there are multiple nodes.Yes Yes
+            //$array Device → Controller Range separated by a -.e.g. 0 - 2 for an array with the indexes 0, 1 and 2
+            Dictionary<string, string> nodes = new Dictionary<string, string>();
+            List<DeviceType> activeTypes = new List<DeviceType>();
+            foreach (Datapoint dp in CI.datapoints)
+            {
+                // Get the device type, add it to the list of active types (if it's not allready there)
+                DeviceType devicetype = CI.devicetypes.Find(x => x.Number == dp.Type && x.Channels.Contains(dp.Channel) && x.Modes.Contains(dp.Mode));
+                if (!activeTypes.Contains(devicetype))
+                {
+                    activeTypes.Add(devicetype);
+                }
+            }
+            foreach (DeviceType devType in activeTypes)
+            {
+                // Make a list for this type, fill it with all datapoints of that type.
+                List<Datapoint> dps = new List<Datapoint>();
+                dps.AddRange(CI.datapoints.Where(x => x.Type == devType.Number && devType.Modes.Contains(x.Mode) && devType.Channels.Contains(x.Channel)));
+
+                // This list now contains all the array items for the node(device type)
+                
+                //                                      homie          /       supercar        /    lights    /
+                String BaseTopic = ($"{Program.Settings.MQTT_BASETOPIC}/{Program.Settings.NAME}/{devType.GetSafeName()}").Replace("//", "/");
+                nodes.Add($"{BaseTopic}$name", devType.Name);
+                nodes.Add($"{BaseTopic}$type", devType.GetSafeName());
+
+                string[] props = devType.GetProperties();
+                string concatProp = "";
+                foreach (string p in props)
+                {
+                    concatProp += (p + ",");
+                }
+                nodes.Add($"{BaseTopic}$properties", concatProp.Remove(concatProp.Length-1));
+            }
+
+
+
+            //Dictionary<string, string> node = new Dictionary<string, string>
+            //{
+            //    { $"{BaseTopic}$name", dp.Name },
+            //    { $"{BaseTopic}$type", devicetype.Name },
+            //    { $"{BaseTopic}$properties", devicetype.MessageTypes.ToString() },
+            //    //{ $"{BaseTopic}$array",  },
+            //};
+
+            return "x";
+
+                //homie/super-car/$nodes → "lights[]"
+
+                //homie/super-car/lights/$name → "Lights"
+                //homie/super-car/lights/$properties → "intensity"
+                //homie/super-car/lights/$array → "0-1"
+
+                //homie/super-car/lights/intensity/$name → "Intensity"
+                //homie/super-car/lights/intensity/$settable → "true"
+                //homie/super-car/lights/intensity/$unit → "%"
+                //homie/super-car/lights/intensity/$datatype → "integer"
+                //homie/super-car/lights/intensity/$format → "0:100"
+
+                //homie/super-car/lights_0/$name → "Back lights"
+                //homie/super-car/lights_0/intensity → "0"
+                //homie/super-car/lights_1/$name → "Front lights"
+                //homie/super-car/lights_1/intensity → "100"
+
+        }
+
+        private void SendStats()
+        {
+            //$stats / uptime   Device → Controller Time elapsed in seconds since the boot of the device Yes Yes
+            //$stats / signal   Device → Controller Signal strength in % Yes No
+            //$stats / cputemp  Device → Controller CPU Temperature in °C Yes No
+            //$stats / cpuload  Device → Controller CPU Load in %.Average of last $interval including all CPUs Yes No
+            //$stats / battery  Device → Controller Battery level in % Yes No
+            //$stats / freeheap Device → Controller Free heap in bytes Yes No
+            //$stats / supply   Device → Controller Supply Voltage in V Yes No
+            String BaseTopic = (Program.Settings.MQTT_BASETOPIC + "/" + Program.Settings.NAME + "/$stats/").Replace("//", "/");
+            Dictionary<string, string> attributes = new Dictionary<string, string>
+            {
+                { $"{BaseTopic}uptime", GetStatsUptime() },
+                //{ $"{BaseTopic}signal", GetStatsSignal() },
+                { $"{BaseTopic}cputemp", GetStatsCPUtemp() },
+                //{ $"{BaseTopic}cpuload", GetStatsCPUload() },
+                //{ $"{BaseTopic}battery", GetStatsBattery() },
+                //{ $"{BaseTopic}freeheap", GetStatsFreeHeap() },
+                //{ $"{BaseTopic}supply", GetStatsSupply() },
+            };
+        }
+
+        #region "Stats helpers"
+
+        private string GetStatsUptime()
+        {
+            return DateTime.Now.Subtract(Program.ApplicationStart).TotalSeconds.ToString();
+        }
+
+        private string GetStatsSignal()
+        {
+            return "0%";
+        }
+        private string GetStatsCPUtemp()
+        {
+            try
+            {
+                string temp = "0";
+                using (StreamReader r = new StreamReader("/sys/class/thermal/thermal_zone0/temp"))
+                {
+                    temp = r.ReadToEnd();
+                }
+                return temp;
+            }
+            catch (Exception exception)
+            {
+                return "-1";
+            }
+        }
+        private string GetStatsCPUload()
+        {
+            return "0";
+        }
+        private string GetStatsBattery()
+        {
+            return "0%";
+        }
+        private string GetStatsFreeHeap()
+        {
+            return "0";
+        }
+        private string GetStatsSupply()
+        {
+            return "0";
+        }
+        #endregion
 
     }
 }

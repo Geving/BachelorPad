@@ -21,6 +21,7 @@ namespace xComfortWingman
     class Program
     {
         public static readonly Settings Settings = new Settings(true);
+        public static readonly DateTime ApplicationStart = DateTime.Now;
 
         static void Main(string[] args)
         {
@@ -46,10 +47,13 @@ namespace xComfortWingman
             //DoLog("\t  [Example: 06 1B 01 0A 01 00");
             //Console.ForegroundColor = ConsoleColor.Gray;
             //DoLog("Current timeout value: " + Settings.RMF_TIMEOUT);
-            
-            CI.ImportDatapointsFromFile("Datenpunkte.txt");
-            MQTT.RunMQTTClientAsync().Wait();
-            CI.ConnectToCI().Wait();
+
+            CI.ImportDatapointsFromFile("C:\\Misc\\Datenpunkte.txt");
+            //CI.ImportDatapointsFromFile("Datenpunkte.txt");
+
+            MQTT.Testing();
+            //MQTT.RunMQTTClientAsync().Wait();
+            //CI.ConnectToCI().Wait();
 
             DoLog("Startup complete!",4);
 
