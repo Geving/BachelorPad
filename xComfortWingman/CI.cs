@@ -119,6 +119,7 @@ namespace xComfortWingman
                 if (myDevice == null)
                 {
                     DoLog("FAILED", 3, true, 12);
+                    Program.BootWithoutError = false;
                     return;
                 }
             }
@@ -211,22 +212,29 @@ namespace xComfortWingman
         #region "RS232"
         private static void ConnectAsRS232()
         {
-            com = new System.IO.Ports.SerialPort(Program.Settings.RS232_PORT, Program.Settings.RS232_BAUD)
+            try
             {
-                StopBits = System.IO.Ports.StopBits.One,
-                Parity = System.IO.Ports.Parity.None
-            };
+                com = new System.IO.Ports.SerialPort(Program.Settings.RS232_PORT, Program.Settings.RS232_BAUD)
+                {
+                    StopBits = System.IO.Ports.StopBits.One,
+                    Parity = System.IO.Ports.Parity.None
+                };
 
-            com.DataReceived += new System.IO.Ports.SerialDataReceivedEventHandler(DataReceivedHandler);
+                com.DataReceived += new System.IO.Ports.SerialDataReceivedEventHandler(DataReceivedHandler);
 
-            com.Open();
-            DoLog($"{com.PortName} is open: " + com.IsOpen);
+                com.Open();
+                DoLog($"{com.PortName} is open: " + com.IsOpen);
 
-            //{ 0x5A, 0x06, 0xB1, 0x02, 0x0A, 0x01, 0x70, 0xA5 }; // Turns on DP #2
+                //{ 0x5A, 0x06, 0xB1, 0x02, 0x0A, 0x01, 0x70, 0xA5 }; // Turns on DP #2
 
-            byte[] myCommand = { 0x5A, 0x04, 0xB2, 0x1B, 0x00, 0xA5 }; // Requests the software versions of the interface 
-            PrintByte(myCommand, "Requesting software version");
-            com.Write(myCommand, 0, 6);
+                byte[] myCommand = { 0x5A, 0x04, 0xB2, 0x1B, 0x00, 0xA5 }; // Requests the software versions of the interface 
+                PrintByte(myCommand, "Requesting software version");
+                com.Write(myCommand, 0, 6);
+            } catch (Exception exception)
+            {
+                Program.BootWithoutError = false;
+                MyLogger.LogException(exception);
+            }
         }
 
         private static void DataReceivedHandler(object sender, System.IO.Ports.SerialDataReceivedEventArgs e)
@@ -1342,7 +1350,10 @@ namespace xComfortWingman
             //This is where we tell BachelorPad about the change that has been made.
             //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
             DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just reported value " + dataValue);
-            await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+            Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
+            Homie.UpdateArrayElement(arrayElement, dataValue);
+            await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue);
+            //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
         }
 
         private static async void BroadcastAck(int dataPointID, string dataValue)
@@ -1350,7 +1361,10 @@ namespace xComfortWingman
             //This is where we tell BachelorPad about the change that has been made.
             //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
             DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just confirmed value " + dataValue);
-            await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
+            Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
+            Homie.UpdateArrayElement(arrayElement, dataValue);
+            await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue);
+            //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
         }
 
         #region "Helpers"
@@ -1632,6 +1646,12 @@ namespace xComfortWingman
             {
                 return arrayToFix;
             }
+        }
+
+        public async static Task FakeData(byte[] FakeData)
+        {
+            DoLog("Faking data!",4);
+            await IncommingData(FakeData);
         }
 
         #endregion

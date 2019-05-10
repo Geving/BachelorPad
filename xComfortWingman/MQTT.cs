@@ -236,17 +236,20 @@ namespace xComfortWingman
                     else
                     {
                         DoLog("FAIL", 3, true, 14);
+                        Program.BootWithoutError = false;
                     }
                 }
                 catch (Exception exception)
                 {
                     DoLog("ERROR", 3, true, 12);
+                    Program.BootWithoutError = false;
                     LogException(exception);
                 }
             }
             catch (Exception ex)
             {
                 LogException(ex);
+                Program.BootWithoutError = false;
             }
             return;
         }
@@ -296,7 +299,8 @@ namespace xComfortWingman
 
         public static void Testing()
         {
-            Homie.CreateAndListNodes();
+            SendInitialData().Wait();
+            //Homie.CreateAndListNodes();
             //foreach (PublishModel pm in MakeDeviceAttributes())
             //{
             //    Console.WriteLine($"{pm.PublishPath}  -->  {pm.Payload}");

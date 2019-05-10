@@ -17,13 +17,13 @@ namespace xComfortWingman
             return HomieArrayElements.Find(x => x.BelongsToDP == DP);
         }
 
-        public static void UpdateArrayElement(int DP)
+        public static void UpdateArrayElement(int DP,string dataValue)
         {
-            UpdateArrayElement(GetArrayElement(DP));
+            UpdateArrayElement(GetArrayElement(DP),dataValue);
         }
-        public static void UpdateArrayElement(ArrayElement arrayElement)
+        public static void UpdateArrayElement(ArrayElement arrayElement, string dataValue)
         {
-
+            arrayElement.Value = dataValue;
         }
 
         //public static Dictionary<string, string> PropertyDetails(string propertyName, string baseTopic)
