@@ -155,6 +155,10 @@ namespace xComfortWingman
                 {
                     DoLog("OK", 3, false, 10);
                     DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                    stopwatch.Stop();
+
+                    await MQTT.SendInitialData();
+                    
                     DoLog("Listening for xComfort messages...");
                     myHidStream.ReadTimeout = Timeout.Infinite;
 
@@ -301,7 +305,7 @@ namespace xComfortWingman
                     while ((aline = reader.ReadLine()) != null)
                     {
                         string[] line = aline.Split("\t");
-                        datapoints.Add(new Datapoint(Convert.ToInt32(line[0]), line[1], Convert.ToInt32(line[2]), Convert.ToInt32(line[3]), Convert.ToInt32(line[4]), Convert.ToInt32(line[5]), Convert.ToInt32(line[6]), line[7]));
+                        datapoints.Add(new Datapoint(Convert.ToInt32(line[0]), line[1].Trim(), Convert.ToInt32(line[2]), Convert.ToInt32(line[3]), Convert.ToInt32(line[4]), Convert.ToInt32(line[5]), Convert.ToInt32(line[6]), line[7]));
                         //DoLog("Added datapoint #" + line[0] + " named " + line[1]);
                     }
                     DoLog("There are now " + datapoints.Count + " datapoints registered in the system!");
@@ -441,7 +445,7 @@ namespace xComfortWingman
             if (Program.Settings.RAW_ENABLED)
             {
                 DoLog("Sending RAW data via MQTT...", 2);
-                await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/RAW", FormatByteForPrint(dataFromCI, true));
+                await MQTT.SendMQTTMessageAsync("RAW", FormatByteForPrint(dataFromCI, true), false);
                 //DoLog("OK", 1, true, 10);
             }
 
@@ -997,7 +1001,7 @@ namespace xComfortWingman
                     DoLog("Datapoint " + rxPacket.MGW_RX_DATAPOINT + " was not found!", 4);
                     //Unfortunately, there is no way to create a new datapoint from the rxPacket.
                     //All that can be done is to alert the user and move on...
-                    MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/info",$"CI received data from an unknown datapoint: {rxPacket.MGW_RX_DATAPOINT}. Is it time to update the datapoints.txt file perhaps?").Wait();
+                    MQTT.SendMQTTMessageAsync("info",$"CI received data from an unknown datapoint: {rxPacket.MGW_RX_DATAPOINT}. Is it time to update the datapoints.txt file perhaps?", false).Wait();
                     return;
                 }
                 DeviceType devicetype = devicetypes.Find(x => x.Number == datapoint.Type);
@@ -1145,7 +1149,8 @@ namespace xComfortWingman
                                                         //Mode 0 (Send switching commands): MGW_RDT_RC_DATA(temperature and wheel; MGW_RX_MSG_TYPE = MGW_RMT_TOO_COLD / MGW_RMT_TOO_WARM)
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
-                                                        BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
+                                                        //BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
+                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}");
                                                         break;
                                                     }
                                                 default:
@@ -1153,7 +1158,8 @@ namespace xComfortWingman
                                                         //Mode 1 (Send temperature value):  MGW_RDT_RC_DATA(temperature and wheel; MGW_RX_MSG_TYPE = MGW_RMT_VALUE)
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
-                                                        BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
+                                                        //BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
+                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}");
                                                         break;
                                                     }
                                             }
@@ -1346,25 +1352,54 @@ namespace xComfortWingman
         }
 
         private static async void BroadcastChange(int dataPointID, string dataValue)
-        {
-            //This is where we tell BachelorPad about the change that has been made.
-            //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
-            DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just reported value " + dataValue);
-            Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
-            Homie.UpdateArrayElement(arrayElement, dataValue);
-            await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue);
-            //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+            {
+            try
+            {
+                //This is where we tell BachelorPad about the change that has been made.
+                //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
+                Datapoint datapoint = datapoints.Find(x => x.DP == dataPointID);
+                DoLog("Datapoint " + dataPointID + " (" + datapoint.Name + ") just reported value " + dataValue);
+                //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
+                //Homie.UpdateArrayElement(arrayElement, dataValue);
+                //if(datapoint.Type==5 || datapoint.Type == 51)
+                //{
+                //    //Special case for the Room Controller, which sends TWO pieces of data in one transmission...
+                //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/$name", arrayElement.Name, true);
+                //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/" + dataValue.Split(";")[0].Split(":")[0], dataValue.Split(";")[0].Split(":")[1], true);
+                //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/" + dataValue.Split(";")[1].Split(":")[0], dataValue.Split(";")[1].Split(":")[1], true);
+                //}
+                //else
+                //{
+                //    //await MQTT.PublishArrayElement(arrayElement);
+                //    await Homie.PublishDatapointAsNode(datapoint);
+                //}
+
+                await Homie.PublishDatapointAsNode(datapoint);
+
+                //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+            }
+            catch (Exception exception)
+            {
+                LogException(exception);
+            }
         }
 
         private static async void BroadcastAck(int dataPointID, string dataValue)
         {
-            //This is where we tell BachelorPad about the change that has been made.
-            //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
-            DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just confirmed value " + dataValue);
-            Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
-            Homie.UpdateArrayElement(arrayElement, dataValue);
-            await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue);
-            //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
+            try
+            { 
+                //This is where we tell BachelorPad about the change that has been made.
+                //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
+                DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just confirmed value " + dataValue);
+                Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
+                Homie.UpdateArrayElement(arrayElement, dataValue);
+                await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue, true);
+                //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
+            }
+            catch (Exception exception)
+            {
+                LogException(exception);
+            }
         }
 
         #region "Helpers"

@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace xComfortWingman
 {
@@ -26,90 +28,88 @@ namespace xComfortWingman
             arrayElement.Value = dataValue;
         }
 
-        //public static Dictionary<string, string> PropertyDetails(string propertyName, string baseTopic)
-        public static List<PublishModel> PropertyDetails(string propertyName, string baseTopic)
+        public static List<PublishModel> PropertyDetails(string propName, string dpName)
         {
-            //Dictionary<string, string> props = new Dictionary<string, string>();
             List<PublishModel> props = new List<PublishModel>();
-            props.Add(new PublishModel(baseTopic + propertyName + "/$name", propertyName));                   //homie/super-car/lights/intensity/$name → "Intensity"
-            //homie/super-car/lights/intensity/$settable → "true"
-            //homie/super-car/lights/intensity/$unit → "%"
-            //homie/super-car/lights/intensity/$datatype → "integer"
-            //homie/super-car/lights/intensity/$format → "0:100"
-            string switcher = propertyName;
-            propertyName = "";
+            string switcher = propName;
+                                                                                                            //               /dpName/propName /
+            props.Add(new PublishModel($"{dpName}/{propName}/$name", propName));                            //homie/super-car/lights/intensity/$name → "Intensity"
+                                                                                                            //homie/super-car/lights/intensity/$settable → "true"
+                                                                                                            //homie/super-car/lights/intensity/$unit → "%"
+                                                                                                            //homie/super-car/lights/intensity/$datatype → "integer"
+                                                                                                            //homie/super-car/lights/intensity/$format → "0:100"
             switch (switcher)
             {
                 case "power":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "true"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "boolean"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "true"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "boolean"));
                         break;
                     }
                 case "intensity":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "true"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$unit", "%"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "integer"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$format", "0-100"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "true"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$unit", "%"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "integer"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$format", "0-100"));
                         break;
                     }
                 case "jalousie":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "true"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "string"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "true"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "string"));
                         break;
                     }
                 case "buttonstate":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "false"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "string"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "false"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "string"));
                         break;
                     }
                 case "wheelposition":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "false"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "float"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$format", "-15:3"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "false"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "float"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$format", "-15:3"));
                         break;
                     }
                 case "temperature":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "false"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$unit", "°C"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "float"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$format", "-50:180"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "false"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$unit", "°C"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "float"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$format", "-50:180"));
                         break;
                     }
                 case "humidity":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "false"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$unit", "%"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "integer"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$format", "0-100"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "false"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$unit", "%"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "integer"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$format", "0-100"));
                         break;
                     }
                 case "battery":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "false"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "integer"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$format", "0-10"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "false"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "integer"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$format", "0-10"));
                         break;
                     }
                 case "signal":
                     {
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "false"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$unit", "-dBm"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "integer"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$format", "0-120"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "false"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$unit", "-dBm"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "integer"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$format", "0-120"));
                         break;
                     }
                 default:
                     {
                         // This is the bare minimum required to move the data through the system so that it'll be
                         // possible to handle those special devices in the next system...
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$settable", "false"));
-                        props.Add(new PublishModel(baseTopic + propertyName + "/$datatype", "string"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$settable", "false"));
+                        props.Add(new PublishModel($"{dpName}/{propName}/$datatype", "string"));
                         break;
                     }
             }
@@ -216,42 +216,42 @@ namespace xComfortWingman
         {
             Dictionary<int, string> dict = new Dictionary<int, string>
             {
-                { 1, "Push-button-Single" },
-                { 2, "Push-button-Dual" },
-                { 3, "Push-button-Quad" },
-                { 5, "RoomController-w-Switch" },
+                { 1, "PushButtonSingle" },
+                { 2, "PushButtonDual" },
+                { 3, "PushButtonQuad" },
+                { 5, "RoomControllerWSwitch" },
                 { 16, "SwitchingActuator" },
                 { 17, "DimmingActuator" },
                 { 18, "JalousieActuator" },
-                { 19, "BinaryInput-230V" },
-                { 20, "BinaryInput-Battery" },
-                { 21, "RemoteControl-12Channel-old-design" },
-                { 22, "Home-Manager" },
+                { 19, "BinaryInput230V" },
+                { 20, "BinaryInputBattery" },
+                { 21, "RemoteControl12ChannelOldDesign" },
+                { 22, "HomeManager" },
                 { 23, "TemperatureInput" },
                 { 24, "AnalogInput" },
                 { 25, "AnalogActuator" },
-                { 26, "Room-Manager" },
-                { 27, "JalousieActuator-w-Security" },
+                { 26, "RoomManager" },
+                { 27, "JalousieActuatorWSecurity" },
                 { 28, "CommunicationInterface" },
                 { 29, "MotionDetector" },
-                { 48, "RemoteControl-2Channel-small" },
-                { 49, "RemoteControl-12Channel" },
-                { 50, "RemoteControl-12Channel-w-display" },
-                { 51, "RoomController-w-Switch-Humidity" },
+                { 48, "RemoteControl2ChannelSmall" },
+                { 49, "RemoteControl12Channel" },
+                { 50, "RemoteControl12ChannelWDisplay" },
+                { 51, "RoomControllerWSwitchHumidity" },
                 { 52, "Router" },
                 { 53, "ImpulseInput" },
                 { 54, "EMS" },
-                { 55, "E-RaditorActuator" },
-                { 56, "RemoteControl-Alarm-Pushbutton" },
+                { 55, "ERaditorActuator" },
+                { 56, "RemoteControlAlarmPushbutton" },
                 { 57, "BOSCOS" },
                 { 62, "MEP" },
                 { 65, "HRV" },
-                { 68, "Rosetta-Sensor" },
-                { 69, "Rosetta-Router" },
+                { 68, "RosettaSensor" },
+                { 69, "RosettaRouter" },
                 { 71, "MultiChannelHeatingActuator" },
                 { 72, "CommunicationInterfaceUSB" },
-                { 74, "SwitchingActuator-NewGeneration" },
-                { 75, "Router-NewGeneration" },
+                { 74, "SwitchingActuatorNewGeneration" },
+                { 75, "RouterNewGeneration" },
             };
 
             dict.TryGetValue(System.Convert.ToInt32(devType), out string tmp);
@@ -321,9 +321,10 @@ namespace xComfortWingman
             foreach (Datapoint dp in CI.datapoints)
             {
                 // Get the device type, add it to the list of active types (if it's not allready there)
-                DeviceType devicetype = CI.devicetypes.Find(x => x.Number == dp.Type);
-                if (!(devicetype != null && devicetype.Channels.Contains(dp.Channel) && devicetype.Modes.Contains(dp.Mode))) { continue; }
-                if (!activeTypes.Contains(devicetype)) { activeTypes.Add(devicetype); }
+                System.Diagnostics.Debug.WriteLine(dp.Name + " is DP type: " + dp.Type);
+                DeviceType devicetype = CI.devicetypes.Find(x => x.Number == dp.Type && x.Channels.Contains(dp.Channel) && x.Modes.Contains(dp.Mode));
+                //if (!(devicetype != null && devicetype.Channels.Contains(dp.Channel) && devicetype.Modes.Contains(dp.Mode))) { continue; }
+                if (devicetype != null && !activeTypes.Contains(devicetype)) { activeTypes.Add(devicetype); }
             }
 
             foreach (DeviceType devType in activeTypes)
@@ -334,10 +335,10 @@ namespace xComfortWingman
                 string BaseTopic = ($"{Program.Settings.MQTT_BASETOPIC}/{Program.Settings.NAME}/").Replace("//", "/");
 
                 // Add it to the list of node names.
-                pubList.Add(new PublishModel($"{BaseTopic}/$nodes", $"{devName}[]"));                                       //homie/super-car/$nodes → "lights[]"
+                //pubList.Add(new PublishModel($"{BaseTopic}/$nodes", $"{devName}YY[]"));                                       //homie/super-car/$nodes → "lights[]"
 
                 // Update the base topic
-                BaseTopic += ($"{devName}").Replace("//", "/");
+                BaseTopic = $"{devName}";//.Replace("//", "/");
 
 
                 // Get all datapoints that belong to this specific devicetype
@@ -371,12 +372,137 @@ namespace xComfortWingman
         }
 
 
+        //      Non-array solution:
+
+        //homie/super-car/$nodes → "wheels,ENGINE,lights[]"
+        //                                     /
+        //                    -----------------
+        //                   /
+        //homie/super-car/ENGINE/$name → "Car engine"
+        //homie/super-car/ENGINE/$type → "V8"
+        //homie/super-car/ENGINE/$properties → "speed,direction,temperature"
+        //                   |                                      /
+        //                   |         -----------------------------
+        //                   |        /
+        //homie/super-car/ENGINE/temperature/$name → "Engine temperature"
+        //homie/super-car/ENGINE/temperature/$settable → "false"
+        //homie/super-car/ENGINE/temperature/$unit → "°C"
+        //homie/super-car/ENGINE/temperature/$datatype → "float"
+        //homie/super-car/ENGINE/temperature/$format → "-20:120"
+        //
+        //homie/super-car/ENGINE/temperature → "21.5"
+
+
+        public static async System.Threading.Tasks.Task PublishDatapointAsNode(Datapoint datapoint)
+        {
+            // First, we need a place to store all of the MQTT messages we need to send, then send them all at once.
+            List<PublishModel> publishModels = new List<PublishModel>();
+            string NodeName = (SanitiseString(datapoint.Name)) + "/";
+
+            // Get the correct device type for the datapoint
+            DeviceType devicetype = CI.devicetypes.Find(x => x.Number == datapoint.Type && x.Channels.Contains(datapoint.Channel) && x.Modes.Contains(datapoint.Mode));
+
+            // Add the properties for this node/device
+            string typeProperties = Homie.GetPropertiesForDeviceType(devicetype);
+
+            publishModels.Add(new PublishModel(NodeName + "$name", datapoint.Name));
+            publishModels.Add(new PublishModel(NodeName + "$type", devicetype.Name));
+            publishModels.Add(new PublishModel(NodeName + "$properties", typeProperties));
+
+            foreach (string property in typeProperties.Split(","))
+            {
+                // This adds the 5 property messages
+                publishModels.AddRange(PropertyDetails(property, Homie.SanitiseString(datapoint.Name)));
+
+                // Now, all we ned is the data...
+                string dataAsString = CI.GetDataFromPacket(datapoint.LatestDataValues.MGW_RX_DATA, datapoint.LatestDataValues.MGW_RX_DATA_TYPE, "");
+                if (datapoint.LatestDataValues.MGW_RX_DATA_TYPE==0x00) { dataAsString = Protocol.PT_RX.MGW_RX_MSG_TYPE.GetNameFromByte(datapoint.LatestDataValues.MGW_RX_MSG_TYPE); }
+
+                if (property == "signal") { dataAsString = datapoint.LatestDataValues.MGW_RX_RSSI.ToString(); }         // Override for the two properties where the data isn't in the normal place
+                if (property == "battery") { dataAsString = datapoint.LatestDataValues.MGW_RX_BATTERY.ToString(); }
+                if (dataAsString != "") { publishModels.Add(new PublishModel(NodeName + property, dataAsString)); }
+            }
+
+
+            foreach (PublishModel pub in publishModels)
+            {
+                //Console.WriteLine(pub.PublishPath + "\t\t\t" + pub.Payload);
+                await MQTT.SendMQTTMessageAsync(pub.PublishPath, pub.Payload, true);
+            }
+        }
+
+        public static async Task PublishStats()
+        {
+            // These must be sent with the interval given in homie/unitname/$interval
+            await MQTT.SendMQTTMessageAsync($"$stats/uptime", GetStatsUptime(),true);
+            await MQTT.SendMQTTMessageAsync($"$stats/signal", GetStatsSignal(), true);
+            await MQTT.SendMQTTMessageAsync($"$stats/cputemp", GetStatsCPUtemp(), true);
+            await MQTT.SendMQTTMessageAsync($"$stats/cpuload", GetStatsCPUload(), true);
+            await MQTT.SendMQTTMessageAsync($"$stats/battery", GetStatsBattery(), true);
+            await MQTT.SendMQTTMessageAsync($"$stats/freeheap", GetStatsFreeHeap(), true);
+            await MQTT.SendMQTTMessageAsync($"$stats/supply", GetStatsSupply(), true);
+        }
+
+    #region "Stats helpers"
+
+        private static string GetStatsUptime()
+        {
+            return DateTime.Now.Subtract(Program.ApplicationStart).TotalSeconds.ToString();
+        }
+        private static string GetStatsSignal()
+        {
+            return "0%";
+        }
+        private static string GetStatsCPUtemp()
+        {
+            try
+            {
+                string temp = "0";
+                using (StreamReader r = new StreamReader("/sys/class/thermal/thermal_zone0/temp"))
+                {
+                    temp = r.ReadToEnd();
+                }
+                return temp;
+            }
+            catch (Exception exception)
+            {
+                return "-1";
+            }
+        }
+        private static string GetStatsCPUload()
+        {
+            return "0";
+        }
+        private static string GetStatsBattery()
+        {
+            return "0%";
+        }
+        private static string GetStatsFreeHeap()
+        {
+            return "0";
+        }
+        private static string GetStatsSupply()
+        {
+            return "0";
+        }
+    #endregion
+
+        public static string SanitiseString(string str)
+        {
+            return System.Text.RegularExpressions.Regex.Replace(str, "[^a-zA-Z0-9_]+", "", System.Text.RegularExpressions.RegexOptions.Compiled);
+        }
+
         public class Node
         {
+            //MQTT specifics
             public string PublishPath { get; set; }
             public string Name { get; set; }            //homie/super-car/lights/$name → "Lights"
             public string Properties { get; set; }      //homie/super-car/lights/$properties → "intensity"
-            public string Array { get; set; }           //homie/super-car/lights/$array → "0-1"
+            public string Array { get; set; }           //homie/super-car/lights/$array → "0-1"                     // Apparently, these don't work. That's about 15hrs lost...
+
+
+            // Metadata
+            public int BelongsToDP { get; set; }
         }
 
         public class Property

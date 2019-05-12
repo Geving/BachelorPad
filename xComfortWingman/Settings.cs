@@ -39,8 +39,8 @@ namespace xComfortWingman
         public bool RAW_ENABLED { get; set; } = true;
         public int RMF_TIMEOUT { get; set; } = 5000;
         public bool DEBUGMODE { get; set; } = true;
-        public String DATAPOINTS_FILENAME { get; set; } = "datenpunkte.txt";
-        public String NAME { get; set; } = "BachelorPad";
+        public String DATAPOINTS_FILENAME { get; set; } = "Datenpunkte.txt";
+        public String NAME { get; set; } = "xComfort";
 
         // MQTT related settings
         public MQTT_CONNECTION_MODE MQTT_CONNECTION_MODE { get; set; } = MQTT_CONNECTION_MODE.TCP;
@@ -51,12 +51,12 @@ namespace xComfortWingman
         public string MQTT_CRED_PASSWORD { get; set; } = "";
         public bool MQTT_USE_TLS { get; set; } = false;
         public bool MQTT_CLEAN_SESSION { get; set; } = false;
-        public string MQTT_BASETOPIC { get; set; } = "BachelorPad/xComfort";
+        public string MQTT_BASETOPIC { get; set; } = "homie/";
         public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/#/be/subscribed/to" };
 
         // MQTT HOMIE related
         public string MQTT_HOMIE_HOMIE { get; set; } = "3.0"; //{ $"{BaseTopic}$homie", "3.0" },
-        public string MQTT_HOMIE_NAME { get; set; } = "BachelorPad";    //{ $"{BaseTopic}$name", "3.0" },
+        public string MQTT_HOMIE_NAME { get; set; } = "xComfort";    //{ $"{BaseTopic}$name", "3.0" },
         //public string MQTT_HOMIE_LOCALIP { get; set; }                //{ $"{BaseTopic}$localip", "3.0" },
         //public string MQTT_HOMIE_MAC { get; set; }                    //{ $"{BaseTopic}$mac", "3.0" },
         public string MQTT_HOMIE_FW_NAME { get; set; } = "FW";          //{ $"{BaseTopic}$fw/name", "3.0" },
