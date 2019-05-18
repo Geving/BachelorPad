@@ -11,7 +11,7 @@ namespace xComfortWingman
 
         public static void DoLog(String text, int level, bool newline)
         {
-            if (level > 2 || Program.Settings.DEBUGMODE)
+            if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
                 //ConsoleColor fc = Console.ForegroundColor;
                 //ConsoleColor bc = Console.BackgroundColor;
@@ -81,7 +81,7 @@ namespace xComfortWingman
 
         public static void DoLog(String text, int level, bool newline, int color)
         {
-            if (level > 2 || Program.Settings.DEBUGMODE)
+            if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
                 String n = "";
                 if (newline) { n = "\n"; }

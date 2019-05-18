@@ -8,7 +8,7 @@ namespace xComfortWingman
 {
     #region "Enums"
 
-    public enum MQTT_CONNECTION_MODE
+    public enum MQTT_CONNECTION_METHOD
     {
         TCP,
         WEBSOCKET
@@ -33,17 +33,16 @@ namespace xComfortWingman
     #endregion
     public class Settings
     {
-
-
+        
         // General settings
-        public bool RAW_ENABLED { get; set; } = true;
-        public int RMF_TIMEOUT { get; set; } = 5000;
-        public bool DEBUGMODE { get; set; } = true;
-        public String DATAPOINTS_FILENAME { get; set; } = "Datenpunkte.txt";
-        public String NAME { get; set; } = "xComfort";
+        public bool GENERAL_RAW_ENABLED { get; set; } = true;
+        public int GENERAL_RMF_TIMEOUT { get; set; } = 5000;
+        public bool GENERAL_DEBUGMODE { get; set; } = true;
+        public String GENERAL_DATAPOINTS_FILENAME { get; set; } = "Datenpunkte.txt";
+        public String GENERAL_NAME { get; set; } = "xComfort";
 
         // MQTT related settings
-        public MQTT_CONNECTION_MODE MQTT_CONNECTION_MODE { get; set; } = MQTT_CONNECTION_MODE.TCP;
+        public MQTT_CONNECTION_METHOD MQTT_CONNECTION_METHOD { get; set; } = MQTT_CONNECTION_METHOD.TCP;
         public string MQTT_SERVER_WEBSOCKET { get; set; } = "destiny.geving.it:1883/mqtt";
         public string MQTT_SERVER_TCP { get; set; } = "destiny.geving.it";
         public string MQTT_CLIENT_ID { get; set; } = "bachelorpad_%rnd%";
@@ -55,21 +54,21 @@ namespace xComfortWingman
         public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/#/be/subscribed/to" };
 
         // MQTT HOMIE related
-        public string MQTT_HOMIE_HOMIE { get; set; } = "3.0"; //{ $"{BaseTopic}$homie", "3.0" },
-        public string MQTT_HOMIE_NAME { get; set; } = "xComfort";    //{ $"{BaseTopic}$name", "3.0" },
-        //public string MQTT_HOMIE_LOCALIP { get; set; }                //{ $"{BaseTopic}$localip", "3.0" },
-        //public string MQTT_HOMIE_MAC { get; set; }                    //{ $"{BaseTopic}$mac", "3.0" },
-        public string MQTT_HOMIE_FW_NAME { get; set; } = "FW";          //{ $"{BaseTopic}$fw/name", "3.0" },
-        public string MQTT_HOMIE_FW_VERSION { get; set; } = "1.0";      //{ $"{BaseTopic}$fw/version", "3.0" },
-        //public string MQTT_HOMIE_NODES { get; set; }                  //{ $"{BaseTopic}$nodes", "3.0" },
-        public string MQTT_HOMIE_IMPLEMENTATION { get; set; } = "RPi3"; //{ $"{BaseTopic}$implementation", "raspberry" },
-        public string MQTT_HOMIE_STATS_INTERVAL { get; set; } = "60";   //{ $"{BaseTopic}$stats/interval", "60" },
-        //public string MQTT_HOMIE_STATE { get; set; }                  //{ $"{BaseTopic}$state", "ready" }
+        public string HOMIE_HOMIE { get; set; } = "3.0"; //{ $"{BaseTopic}$homie", "3.0" },
+        public string HOMIE_NAME { get; set; } = "xComfort";    //{ $"{BaseTopic}$name", "3.0" },
+        //public string HOMIE_LOCALIP { get; set; }                //{ $"{BaseTopic}$localip", "3.0" },
+        //public string HOMIE_MAC { get; set; }                    //{ $"{BaseTopic}$mac", "3.0" },
+        public string HOMIE_FW_NAME { get; set; } = "FW";          //{ $"{BaseTopic}$fw/name", "3.0" },
+        public string HOMIE_FW_VERSION { get; set; } = "1.0";      //{ $"{BaseTopic}$fw/version", "3.0" },
+        //public string HOMIE_NODES { get; set; }                  //{ $"{BaseTopic}$nodes", "3.0" },
+        public string HOMIE_IMPLEMENTATION { get; set; } = "RPi3"; //{ $"{BaseTopic}$implementation", "raspberry" },
+        public string HOMIE_STATS_INTERVAL { get; set; } = "60";   //{ $"{BaseTopic}$stats/interval", "60" },
+        //public string HOMIE_STATE { get; set; }                  //{ $"{BaseTopic}$state", "ready" }
 
 
         // Communication Interface related settings
-        public CI_CONNECTION_MODE CONNECTION_MODE { get; set; } = CI_CONNECTION_MODE.USB_MODE;
-        public byte[][] INTERFACE_INIT_COMMANDS { get; set; } = new byte[10][]; //Allow upto ten sets of commands to be executed at startup
+        public CI_CONNECTION_MODE CI_CONNECTION_MODE { get; set; } = CI_CONNECTION_MODE.USB_MODE;
+        public byte[][] CI_INTERFACE_INIT_COMMANDS { get; set; } = new byte[10][]; //Allow upto ten sets of commands to be executed at startup
 
 
         // RS232 related settings (used if CI is connecting in RS232 mode)
@@ -110,10 +109,10 @@ namespace xComfortWingman
         public void LoadSettings()
         {
             Settings settings = ReadSettingsFromFile();
-            RAW_ENABLED = settings.RAW_ENABLED;
-            RMF_TIMEOUT = settings.RMF_TIMEOUT;
-            DEBUGMODE = settings.DEBUGMODE;
-            MQTT_CONNECTION_MODE = settings.MQTT_CONNECTION_MODE;
+            GENERAL_RAW_ENABLED = settings.GENERAL_RAW_ENABLED;
+            GENERAL_RMF_TIMEOUT = settings.GENERAL_RMF_TIMEOUT;
+            GENERAL_DEBUGMODE = settings.GENERAL_DEBUGMODE;
+            MQTT_CONNECTION_METHOD = settings.MQTT_CONNECTION_METHOD;
             MQTT_SERVER_WEBSOCKET = settings.MQTT_SERVER_WEBSOCKET;
             MQTT_SERVER_TCP = settings.MQTT_SERVER_TCP;
             MQTT_CLIENT_ID = settings.MQTT_CLIENT_ID;
@@ -123,8 +122,8 @@ namespace xComfortWingman
             MQTT_CLEAN_SESSION = settings.MQTT_CLEAN_SESSION;
             MQTT_BASETOPIC = settings.MQTT_BASETOPIC;
             MQTT_EXTRA_SUBS = settings.MQTT_EXTRA_SUBS;
-            CONNECTION_MODE = settings.CONNECTION_MODE;
-            INTERFACE_INIT_COMMANDS = settings.INTERFACE_INIT_COMMANDS;
+            CI_CONNECTION_MODE = settings.CI_CONNECTION_MODE;
+            CI_INTERFACE_INIT_COMMANDS = settings.CI_INTERFACE_INIT_COMMANDS;
             RS232_PORT = settings.RS232_PORT;
             RS232_BAUD = settings.RS232_BAUD;
             RS232_FLOW = settings.RS232_FLOW;
@@ -172,7 +171,7 @@ namespace xComfortWingman
             return JsonConvert.SerializeObject(ReadSettingsFromFile());
         }
 
-        private Settings ReadSettingsFromFile()
+        public Settings ReadSettingsFromFile()
         {
             try
             {

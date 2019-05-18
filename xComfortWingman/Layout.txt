@@ -1,0 +1,88 @@
+﻿			//homie/DEVICE    /NODE  /PROPERTY
+
+            //      DEVICE
+            //homie/DimKitchen
+			//homie/DimKitchen/$homie			"3.0.1"
+            //homie/DimKitchen/$name 			"Kitchen lights"
+            //homie/DimKitchen/$localip			"0.0.0.0"
+            //homie/DimKitchen/$mac				"00:00:00:00:00:00"
+            //homie/DimKitchen/$fw/name			"BachelorPad"
+            //homie/DimKitchen/$fw/version		"1.0.0"
+            //homie/DimKitchen/$nodes			"lights,signal"
+            //homie/DimKitchen/$implementation	"xComfort"
+            //homie/DimKitchen/$stats/interval	"60"
+            //homie/DimKitchen/$state			"ready"
+
+            //                 NODE
+            //homie/DimKitchen/lights
+            //homie/DimKitchen/signal
+
+            //homie/DimKitchen/lights/$name                 =   Lights
+            //homie/DimKitchen/lights/$type                 =   Dimmer
+            //homie/DimKitchen/lights/$properties           =   intensity
+
+            //homie/DimKitchen/signal/$name                 =   "RSSI"
+            //homie/DimKitchen/signal/$type                 =   "Signal"
+            //homie/DimKitchen/signal/$properties           =   "strength"
+
+            //                        PROPERTY
+			//homie/DimKitchen/lights/intensity/$name       =   "Light Intensity"
+            //homie/DimKitchen/lights/intensity/$settable   =   "true"
+            //homie/DimKitchen/lights/intensity/$unit       =   "%"
+            //homie/DimKitchen/lights/intensity/$datatype   =   "integer"
+            //homie/DimKitchen/lights/intensity/$format     =   "0:100"
+
+			//homie/DimKitchen/signal/strength/$name       =   "Signal strength"
+            //homie/DimKitchen/signal/strength/$settable    =   "true"
+            //homie/DimKitchen/signal/strength/$unit        =   "-mDb"
+            //homie/DimKitchen/signal/strength/$datatype    =   "integer"
+            //homie/DimKitchen/signal/strength/$format      =   "0:120"
+
+
+			//      DEVICE
+            //homie/ThermoBathroomF0
+			//homie/ThermoBathroomF0/$homie										=	"3.0.1"
+            //homie/ThermoBathroomF0/$name 										=	"Thermostat bathroom"
+            //homie/ThermoBathroomF0/$localip									=	"0.0.0.0"
+            //homie/ThermoBathroomF0/$mac										=	"00:00:00:00:00:00"
+            //homie/ThermoBathroomF0/$fw/name									=	"BachelorPad"
+            //homie/ThermoBathroomF0/$fw/version								=	"1.0.0"
+            //homie/ThermoBathroomF0/$nodes										=	"lights,signal"
+            //homie/ThermoBathroomF0/$implementation							=	"xComfort"
+            //homie/ThermoBathroomF0/$stats/interval							=	"60"
+            //homie/ThermoBathroomF0/$state										=	"ready"
+
+            //						 NODE
+            //homie/ThermoBathroomF0/temperature
+			//homie/ThermoBathroomF0/wheelposition
+			//homie/ThermoBathroomF0/mode
+            //homie/ThermoBathroomF0/signal
+
+            //homie/ThermoBathroomF0/temperature/$name              			=   "Temperature reading"
+            //homie/ThermoBathroomF0/temperature/$type              			=   "Thermostat"
+            //homie/ThermoBathroomF0/temperature/$properties        			=   "temperature"
+
+            //homie/ThermoBathroomF0/wheelposition/$name            			=   "Wheel position"
+            //homie/ThermoBathroomF0/wheelposition/$type            			=   "wheelposition"
+            //homie/ThermoBathroomF0/wheelposition/$properties      			=   "position"
+
+            //homie/ThermoBathroomF0/mode/$name									=   "Signal mode"
+            //homie/ThermoBathroomF0/mode/$type									=   "Mode"
+            //homie/ThermoBathroomF0/mode/$properties							=   "integer"
+
+            //homie/ThermoBathroomF0/signal/$name								=   "Signal strength"
+            //homie/ThermoBathroomF0/signal/$type								=   "RSSI"
+            //homie/ThermoBathroomF0/signal/$properties							=   "strength"
+
+            //									 PROPERTY
+			//homie/ThermoBathroomF0/temperature/temperature/$name				=   "Temperature"
+            //homie/ThermoBathroomF0/temperature/temperature/$settable			=   "false"
+            //homie/ThermoBathroomF0/temperature/temperature/$unit				=   "C"
+            //homie/ThermoBathroomF0/temperature/temperature/$datatype			=   "integer"
+            //homie/ThermoBathroomF0/temperature/temperature/$format			=   "0:100"
+
+			//homie/ThermoBathroomF0/wheelposition/position/$name				=   "Wheel pos"
+            //homie/ThermoBathroomF0/wheelposition/position/$settable			=   "false"
+            //homie/ThermoBathroomF0/wheelposition/position/$unit				=   ""
+            //homie/ThermoBathroomF0/wheelposition/position/$datatype			=   "float"
+            //homie/ThermoBathroomF0/wheelposition/position/$format				=   "-9:3"

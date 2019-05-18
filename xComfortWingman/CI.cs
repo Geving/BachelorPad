@@ -113,7 +113,7 @@ namespace xComfortWingman
 
         public static async Task ConnectToCI()
         {
-            if (Program.Settings.CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE)
+            if (Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE)
             {
                 await ConnecAsHID(); //Connecting to CI as USB HID
                 if (myDevice == null)
@@ -157,7 +157,7 @@ namespace xComfortWingman
                     DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                     stopwatch.Stop();
 
-                    await MQTT.SendInitialData();
+                    await MQTT.SendInitialDataAsync();
                     
                     DoLog("Listening for xComfort messages...");
                     myHidStream.ReadTimeout = Timeout.Infinite;
@@ -340,13 +340,13 @@ namespace xComfortWingman
         {
             try
             {
-                if (!File.Exists(Program.Settings.DATAPOINTS_FILENAME))
+                if (!File.Exists(Program.Settings.GENERAL_DATAPOINTS_FILENAME))
                 {
                     DoLog("Datapoint file not found!");
                     return "File not found!";
                 }
                 string everything = "Empty file!";
-                FileStream fileStream = new FileStream(Program.Settings.DATAPOINTS_FILENAME, FileMode.Open);
+                FileStream fileStream = new FileStream(Program.Settings.GENERAL_DATAPOINTS_FILENAME, FileMode.Open);
                 using (StreamReader reader = new StreamReader(fileStream))
                 {
                     everything= reader.ReadToEnd();
@@ -365,7 +365,7 @@ namespace xComfortWingman
         {
             try
             {
-                FileStream fileStream = new FileStream(Program.Settings.DATAPOINTS_FILENAME, FileMode.Create);
+                FileStream fileStream = new FileStream(Program.Settings.GENERAL_DATAPOINTS_FILENAME, FileMode.Create);
                 using (StreamWriter writer = new StreamWriter(fileStream))
                 {
                     writer.Write(contents);
@@ -387,14 +387,14 @@ namespace xComfortWingman
             readyToTransmit = false;    // Stop any other thread from sending right now
 
             // Prepare the packet by adding extra bytes if needed.
-            if (Program.Settings.CONNECTION_MODE == CI_CONNECTION_MODE.RS232_MODE) { dataToSend = AddRS232Bytes(dataToSend); }
+            if (Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.RS232_MODE) { dataToSend = AddRS232Bytes(dataToSend); }
             if (dataToSend[0] != 0x00 && dataToSend[0] != Program.Settings.RS232_STARTBYTE) { dataToSend = AddZeroAsFirstByte(dataToSend); }
 
             Array.Resize(ref dataToSend, myDevice.GetMaxOutputReportLength()); //If we don't fill the buffer, it will repeat the data instead of using 0x00. That causes undersired behavior...
 
             DateTime start = DateTime.Now;
 
-            switch (Program.Settings.CONNECTION_MODE)
+            switch (Program.Settings.CI_CONNECTION_MODE)
             {
                 case CI_CONNECTION_MODE.RS232_MODE:
                     {
@@ -410,7 +410,7 @@ namespace xComfortWingman
 
             // Crude timeout check works here, because we don't need any strict timing.
             bool preReleased = false;
-            while (DateTime.Now.Subtract(start).TotalMilliseconds < Program.Settings.RMF_TIMEOUT)
+            while (DateTime.Now.Subtract(start).TotalMilliseconds < Program.Settings.GENERAL_RMF_TIMEOUT)
             {
                 if (readyToTransmit) {
                     preReleased = true; // No need to wait for timeout!
@@ -442,7 +442,7 @@ namespace xComfortWingman
                             12 Byte Rx      Dp 2    Status  No Data     On                                          Signal  Mains pwr
             */
 
-            if (Program.Settings.RAW_ENABLED)
+            if (Program.Settings.GENERAL_RAW_ENABLED)
             {
                 DoLog("Sending RAW data via MQTT...", 2);
                 await MQTT.SendMQTTMessageAsync("RAW", FormatByteForPrint(dataFromCI, true), false);
@@ -1034,25 +1034,25 @@ namespace xComfortWingman
                         case MGW_RMT_ON:
                             {
                                 //The device has been turned on!
-                                BroadcastChange(datapoint.DP, "ON");
+                                BroadcastChange(datapoint.DP, "ON", rxPacket);
                                 break;
                             }
                         case MGW_RMT_OFF:
                             {
                                 //The device has been turned off!
-                                BroadcastChange(datapoint.DP, "OFF");
+                                BroadcastChange(datapoint.DP, "OFF", rxPacket);
                                 break;
                             }
                         case MGW_RMT_SWITCH_ON:
                             {
                                 //The device has been turned on!
-                                BroadcastChange(datapoint.DP, "ON");
+                                BroadcastChange(datapoint.DP, "ON", rxPacket);
                                 break;
                             }
                         case MGW_RMT_SWITCH_OFF:
                             {
                                 //The device has been turned off!
-                                BroadcastChange(datapoint.DP, "OFF");
+                                BroadcastChange(datapoint.DP, "OFF", rxPacket);
                                 break;
                             }
                         case MGW_RMT_UP_PRESSED:
@@ -1078,7 +1078,7 @@ namespace xComfortWingman
                         case MGW_RMT_FORCED:
                             {
                                 //Fixed value
-                                BroadcastChange(datapoint.DP, "Fixed value");
+                                BroadcastChange(datapoint.DP, "Fixed value", rxPacket);
                                 break;
                             }
                         case MGW_RMT_SINGLE_ON:
@@ -1089,7 +1089,7 @@ namespace xComfortWingman
                         case MGW_RMT_VALUE:
                             {
                                 //Analogue value
-                                BroadcastChange(datapoint.DP, GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData).ToString());
+                                BroadcastChange(datapoint.DP, GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData).ToString(), rxPacket);
                                 break;
                             }
                         case MGW_RMT_TOO_COLD:
@@ -1109,7 +1109,7 @@ namespace xComfortWingman
                         case MGW_RMT_STATUS:
                             {
                                 //Data about the current status
-                                BroadcastAck(rxPacket.MGW_RX_DATAPOINT, rxPacket.MGW_RX_INFO_SHORT.ToString());
+                                BroadcastAck(rxPacket.MGW_RX_DATAPOINT, rxPacket.MGW_RX_INFO_SHORT.ToString(), rxPacket);
                                 break;
                             }
                         case MGW_RMT_BASIC_MODE:
@@ -1150,7 +1150,7 @@ namespace xComfortWingman
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
                                                         //BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
-                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}");
+                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket);
                                                         break;
                                                     }
                                                 default:
@@ -1159,7 +1159,7 @@ namespace xComfortWingman
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
                                                         //BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
-                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}");
+                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket);
                                                         break;
                                                     }
                                             }
@@ -1174,7 +1174,7 @@ namespace xComfortWingman
                                                         //Mode 0 (Send switching commands): MGW_RDT_FLOAT(humidity value in percent; MGW_RX_MSG_TYPE = MGW_RMT_SWITCH_ON / MGW_RMT_SWITCH_OFF)
                                                         double data = new double();
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                        BroadcastChange(datapoint.DP, data.ToString());
+                                                        BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                                         break;
                                                     }
                                                 default:
@@ -1182,7 +1182,7 @@ namespace xComfortWingman
                                                         //Mode 1 (Send humidity value):     MGW_RDT_FLOAT(humidity value in percent; MGW_RX_MSG_TYPE = MGW_RMT_VALUE)
                                                         double data = new double();
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                        BroadcastChange(datapoint.DP, data.ToString());
+                                                        BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                                         break;
                                                     }
                                             }
@@ -1194,7 +1194,7 @@ namespace xComfortWingman
                         case 22:    // Home manager
                             {
                                 // This one has 99 channels, and it's impossible to act without knowing what device is associated with each channel (which represents datapoints, actually)
-                                BroadcastChange(datapoint.DP, $"Datapoint: {datapoint.Channel}, Data: {rxPacket.MGW_RX_DATA[0]} {rxPacket.MGW_RX_DATA[1]} {rxPacket.MGW_RX_DATA[2]} {rxPacket.MGW_RX_DATA[3]}");
+                                BroadcastChange(datapoint.DP, $"Datapoint: {datapoint.Channel}, Data: {rxPacket.MGW_RX_DATA[0]} {rxPacket.MGW_RX_DATA[1]} {rxPacket.MGW_RX_DATA[2]} {rxPacket.MGW_RX_DATA[3]}", rxPacket);
                                 break;
                             }
                         case 23:    // Temperature Input
@@ -1206,7 +1206,7 @@ namespace xComfortWingman
                                             //Mode 0 (Send switching commands): MGW_RDT_INT16_1POINT; MGW_RX_MSG_TYPE = MGW_RMT_TOO_COLD / MGW_RMT_TOO_WARM)
                                             double data = new double();
                                             data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                            BroadcastChange(datapoint.DP, data.ToString());
+                                            BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                             break;
                                         }
                                     default:
@@ -1214,7 +1214,7 @@ namespace xComfortWingman
                                             //Mode 1 (Send temperature value):  MGW_RDT_INT16_1POINT; MGW_RX_MSG_TYPE = MGW_RMT_VALUE)
                                             double data = new double();
                                             data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                            BroadcastChange(datapoint.DP, data.ToString());
+                                            BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                             break;
                                         }
                                 }
@@ -1232,7 +1232,7 @@ namespace xComfortWingman
                                                 // This is a Too hot/Too cold value
                                                 double data = new double();
                                                 data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                                 break;
                                             }
                                         case 1:
@@ -1240,7 +1240,7 @@ namespace xComfortWingman
                                                 // This is the temperature measurement value
                                                 double data = new double();
                                                 data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                                 break;
                                             }
                                     }
@@ -1256,7 +1256,7 @@ namespace xComfortWingman
                                                 // This is an ON/OFF value
                                                 double data = new double();
                                                 data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                                 break;
                                             }
                                         case 1:
@@ -1264,7 +1264,7 @@ namespace xComfortWingman
                                                 // This is the analogue voltage/current value
                                                 double data = new double();
                                                 data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                                 break;
                                             }
                                         case 2: // "FORCED"
@@ -1272,7 +1272,7 @@ namespace xComfortWingman
                                                 // This is a percentage value
                                                 double data = new double();
                                                 data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                BroadcastChange(datapoint.DP, data.ToString());
+                                                BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
                                                 break;
                                             }
                                     }
@@ -1334,7 +1334,7 @@ namespace xComfortWingman
                         default:    // Other stuff
                             {
                                 DoLog("Unhandled datapoint: " + datapoint.ToString(),4);
-                                BroadcastChange(0, "Unhandled datapoint: " + datapoint.ToString()); //Datapoint 0 is not a valid datapoint, but the MQTT doesn't care, so it's a nice channel to monitor.
+                                BroadcastChange(0, "Unhandled datapoint: " + datapoint.ToString(), rxPacket); //Datapoint 0 is not a valid datapoint, but the MQTT doesn't care, so it's a nice channel to monitor.
                                 break;
                             }
                     }
@@ -1351,14 +1351,16 @@ namespace xComfortWingman
             HandleRX(rxPacket, true);
         }
 
-        private static async void BroadcastChange(int dataPointID, string dataValue)
+        private static async void BroadcastChange(int dataPointID, string dataValue, PT_RX.Packet packet)
             {
             try
             {
                 //This is where we tell BachelorPad about the change that has been made.
                 //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
                 Datapoint datapoint = datapoints.Find(x => x.DP == dataPointID);
+                Homie.Device device = Homie.devices.Find(x => x.Datapoint.DP == dataPointID);
                 DoLog("Datapoint " + dataPointID + " (" + datapoint.Name + ") just reported value " + dataValue);
+                await Homie.UpdateDeviceData(device, packet);
                 //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
                 //Homie.UpdateArrayElement(arrayElement, dataValue);
                 //if(datapoint.Type==5 || datapoint.Type == 51)
@@ -1373,8 +1375,8 @@ namespace xComfortWingman
                 //    //await MQTT.PublishArrayElement(arrayElement);
                 //    await Homie.PublishDatapointAsNode(datapoint);
                 //}
-
-                await Homie.PublishDatapointAsNode(datapoint);
+                await MQTT.PublishDeviceAsync(device);
+                //await Homie.PublishDatapointAsNode(datapoint);
 
                 //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
             }
@@ -1384,17 +1386,22 @@ namespace xComfortWingman
             }
         }
 
-        private static async void BroadcastAck(int dataPointID, string dataValue)
+        private static async void BroadcastAck(int dataPointID, string dataValue, PT_RX.Packet packet)
         {
             try
-            { 
+            {
+                Datapoint datapoint = datapoints.Find(x => x.DP == dataPointID);
+                Homie.Device device = Homie.devices.Find(x => x.Datapoint.DP == dataPointID);
+                
                 //This is where we tell BachelorPad about the change that has been made.
-                //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
-                DoLog("Datapoint " + dataPointID + " (" + datapoints.Find(x => x.DP == dataPointID).Name + ") just confirmed value " + dataValue);
-                Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
-                Homie.UpdateArrayElement(arrayElement, dataValue);
-                await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue, true);
+                DoLog("Datapoint " + dataPointID + " (" + datapoint.Name + ") just confirmed value " + dataValue);
+                await Homie.UpdateDeviceData(device, packet);
+                await MQTT.PublishDeviceAsync(device);
+                //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
+                //Homie.UpdateArrayElement(arrayElement, dataValue);
+                //await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue, true);
                 //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/ack/", dataValue);
+                //await Homie.PublishDatapointAsNode(datapoint);
             }
             catch (Exception exception)
             {
