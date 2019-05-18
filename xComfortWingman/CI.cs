@@ -277,108 +277,7 @@ namespace xComfortWingman
 
         #endregion
 
-        #region "Datapoints stuff"
-        public static bool ImportDatapointsFromFile(String filePath)
-        {
-            try
-            { 
-                //Boilerplate - Read a datapoint file exported from Eatons own software
-                /* Snippet from an actual file:
-                 *  DP  DP+channel      Serial  Typ Ch  Mod Cls N/A
-                    13	DblBathroomF0 	4925325 16	0	0	0	#000#000#000#000#0#000#000#005#000#	
-                    14	DimToiletDown 	5057045	17	0	0	0	#000#000#000#000#0#000#000#006#000#	
-                    15	DimBathroomDwn 	5027425	17	0	0	0	#000#000#000#000#0#000#000#006#000#	
-                    16	DimInnerHallN 	3288803	17	0	0	0	#000#000#000#000#0#000#000#006#000#	
-                    17	DimInnerHallS 	3812402	17	0	0	0	#000#000#000#000#0#000#000#006#000#	
-                   Delimiter is tab
-                   The 
-                 */
-                if (!File.Exists(filePath))
-                {
-                    DoLog("Datapoint file not found!");
-                    return false;
-                }
-                string aline;
-                FileStream fileStream = new FileStream(filePath, FileMode.Open);
-                using (StreamReader reader = new StreamReader(fileStream))
-                {
-                    while ((aline = reader.ReadLine()) != null)
-                    {
-                        string[] line = aline.Split("\t");
-                        datapoints.Add(new Datapoint(Convert.ToInt32(line[0]), line[1].Trim(), Convert.ToInt32(line[2]), Convert.ToInt32(line[3]), Convert.ToInt32(line[4]), Convert.ToInt32(line[5]), Convert.ToInt32(line[6]), line[7]));
-                        //DoLog("Added datapoint #" + line[0] + " named " + line[1]);
-                    }
-                    DoLog("There are now " + datapoints.Count + " datapoints registered in the system!");
-                }
-                fileStream.Close();
-                return true;
-            }
-            catch (Exception exception)
-            {
-                LogException(exception);
-                return false;
-            }
-        }
 
-        public static bool ImportDatapointsOneByOne(String dataPointLine)
-        {
-            try
-            {          
-                //Allows us to add a single datapoint through some other method than reading the file from disk.
-                string[] line = dataPointLine.Split("\t");
-                datapoints.Add(new Datapoint(Convert.ToInt32(line[0]), line[1], Convert.ToInt32(line[2]), Convert.ToInt32(line[3]), Convert.ToInt32(line[4]), Convert.ToInt32(line[5]), Convert.ToInt32(line[6]), line[7]));
-                return true;
-            }
-            catch (Exception exception)
-            {
-                LogException(exception);
-                return false;
-            }
-        }
-
-        public static String GetDatapointFile()
-        {
-            try
-            {
-                if (!File.Exists(Program.Settings.GENERAL_DATAPOINTS_FILENAME))
-                {
-                    DoLog("Datapoint file not found!");
-                    return "File not found!";
-                }
-                string everything = "Empty file!";
-                FileStream fileStream = new FileStream(Program.Settings.GENERAL_DATAPOINTS_FILENAME, FileMode.Open);
-                using (StreamReader reader = new StreamReader(fileStream))
-                {
-                    everything= reader.ReadToEnd();
-                }
-                fileStream.Close();
-                return everything;
-            }
-            catch (Exception exception)
-            {
-                LogException(exception);
-                return exception.Message;
-            }
-        }
-
-        public static bool SetDatapointFile(String contents)
-        {
-            try
-            {
-                FileStream fileStream = new FileStream(Program.Settings.GENERAL_DATAPOINTS_FILENAME, FileMode.Create);
-                using (StreamWriter writer = new StreamWriter(fileStream))
-                {
-                    writer.Write(contents);
-                }
-                fileStream.Close();
-                return true;
-            } catch (Exception exception)
-            {
-                LogException(exception);
-                return false;
-            }
-        }
-        #endregion
 
 #endregion
 
@@ -485,7 +384,7 @@ namespace xComfortWingman
             }
         }
 
-        public static async Task SendData(int DP, double dataDouble)
+        public static async Task SendNewValueToDatapointAsync(int DP, double dataDouble)
         {
             if (!readyToTransmit)
             {
@@ -1407,6 +1306,33 @@ namespace xComfortWingman
             {
                 LogException(exception);
             }
+        }
+
+        public static async Task RequestUpdateAsync(int DP)
+        {
+            byte[] myCommand = new byte[myDevice.GetMaxOutputReportLength()];  //.ConnectedDeviceDefinition.WriteBufferSize.Value]; 
+            myCommand[0] = 0x00; // This one is not interpreted as data, it is ignored.
+            myCommand[1] = 0x09; // This is the length of the packet. It can be dynamic, but it's also safe to use a fixed value of 0x09 and pad with 0x00.
+            myCommand[2] = 0xB1; // This indicates that we want to control a datapoint.
+            myCommand[3] = Convert.ToByte(DP); // The datapoint to control.
+            myCommand[4] = PT_TX.MGW_TX_EVENT.MGW_TE_REQUEST; // What kind of "event" we want the datapoint to perform, such as set mode/state/level
+            myCommand[5] = 0x00; // Event data, such as "ON"/"OFF"/"42%"
+            myCommand[6] = 0x00; // Sometimes event data requires more than a single byte.
+            myCommand[7] = 0x00; // ---- || -----
+            myCommand[8] = 0x00; // ---- || -----
+            myCommand[9] = 0x00; // Sequence number + priority (If used) 0x00 is a safe value in any case.
+
+            //Update the sequence counter and history
+            int shiftedCounter = sequenceCounter << 4; // This bit shift places the value in the upper nibble, allowing the lower nibble to be used as priority
+            myCommand[9] = Convert.ToByte(shiftedCounter);
+            messageHistory[sequenceCounter] = myCommand;
+            sequenceCounter++;
+            if (sequenceCounter > 15) { sequenceCounter = 0; } // Reset to 0 in order to keep the size to 4 bits.
+
+            //Send the data
+            Console.WriteLine();
+            PrintByte(myCommand, "Outgoing data");
+            await SendThenBlockTransmit(myCommand);
         }
 
         #region "Helpers"

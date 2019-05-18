@@ -152,125 +152,37 @@ namespace xComfortWingman
             AutoReconnect = false; // We don't want to reconnect automatically...
             await mqttClient.DisconnectAsync(); // Disconnect the MQTT client from the broker
         }
-
-        private static async Task MqttClient_ApplicationMessageReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
-        {
-            // We receive messages from all topics that we subscribe to.
-            // Some subscriptions are static, while others are based on the datapoints we have in our file.
-            // homie / device ID / node ID / property ID / set: the device can subscribe to this topic if the property is settable from the controller, in case of actuators.
-            // homie/device-id/$implementation/#
-            // homie/device-id/node/property/set
-            // homie/kitchen-light/light/power/set
-            // homie/$broadcast/# or just specific levels, up to us...
-
-
-            string[] topics = e.ApplicationMessage.Topic.Split("/");
-            int basePathLevels = Program.Settings.MQTT_BASETOPIC.Split("/").Length;
-            if (topics.Length < basePathLevels + 1)
-            {
-                DoLog("Invalid topic path!");
-                return;
-            }
-            switch (topics[basePathLevels])
-            {
-                case "cmd":
-                    {
-                        try
-                        {
-                            await CI.SendData(Convert.ToInt32(topics[basePathLevels + 1]), Convert.ToInt32(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)));
-                        }
-                        catch (Exception exception)
-                        {
-                            LogException(exception);
-                        }
-
-                        break;
-                    }
-                case "get":
-                case "set":
-                    {
-                        switch (topics[basePathLevels + 1])
-                        {
-                            case "config":
-                                {
-                                    if (topics[basePathLevels] == "get")
-                                    {
-                                        await SendMQTTMessageAsync($"{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", Program.Settings.GetSettingsAsJSON(), false);
-                                    }
-                                    else
-                                    {
-                                        await SendMQTTMessageAsync($"{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", Program.Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString(), false);
-                                    }
-                                    break;
-                                }
-                            case "datapoints":
-                                {
-                                    if (topics[basePathLevels] == "get")
-                                    {
-                                        await SendMQTTMessageAsync($"{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", CI.GetDatapointFile(), false);
-                                    }
-                                    else
-                                    {
-                                        await SendMQTTMessageAsync($"{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", CI.SetDatapointFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString(), false);
-                                    }
-                                    break;
-                                }
-                            case "datapoint":
-                                {
-                                    if (topics[basePathLevels] == "get")
-                                    {
-                                        //This makes no sense.
-                                    }
-                                    else
-                                    {
-                                        await SendMQTTMessageAsync($"{topics[basePathLevels]}/{topics[basePathLevels + 1]}/result", CI.ImportDatapointsOneByOne(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString(), false);
-                                    }
-                                    break;
-                                }
-                            default:
-                                {
-                                    break;
-                                }
-                        }
-                        break;
-                    }
-                case "RAW":
-                    {
-                        //Because we only subscribe to RAW/in, we don't need to check topics[3]. It MUST be "in" to trigger this code.
-
-                        // The HEX data comes as plain text, which is right now stored as a byte array.
-                        string payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload).Replace(" ", ""); //Get the text from the payload and remove the spaces
-                        int NumberChars = payload.Length;
-                        byte[] payloadAsBytes = new byte[(NumberChars / 2)];
-                        for (int i = 0; i < NumberChars; i += 2) //Go through the payload two bytes pr step
-                        {
-                            payloadAsBytes[i / 2] = Convert.ToByte(payload.Substring(i, 2), 16); //Convert "two bytes of text" into one byte of "data"
-                        }
-                        //if (payloadAsBytes[0] != 0x00) { payloadAsBytes = AddZeroAsFirstByte(payloadAsBytes); }
-                        //if (Settings.CONNECTION_MODE==CI_CONNECTION_MODE.RS232_MODE) { payloadAsBytes = AddRS232Bytes(payloadAsBytes); }
-                        CI.PrintByte(payloadAsBytes, "Sending RAW data");
-                        await CI.SendData(payloadAsBytes); //Send this to the interface for immediate transmit
-                        break;
-                    }
-                default:
-                    {
-                        DoLog("Unknown topic: " + topics[2]);
-                        break;
-                    }
-            }
-        }
-
+   
         private static async Task MqttClient_Connected(object sender, MqttClientConnectedEventArgs e)
         {
             try
             {
                 ReconnectionFailures = 0; //Reset errorcounter
+
+                // Time to tell everyone about our devices, and set up a subscription for that device if needed.
+                foreach (Homie.Device device in Homie.devices)
+                {
+                    await MQTT.PublishDeviceAsync(device);
+                    foreach (Homie.Node node in device.Node)
+                    {
+                        foreach (Homie.Property property in node.PropertyList)
+                        {
+                            if (property.Settable == "true")
+                            {
+                                await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{Program.Settings.MQTT_BASETOPIC}/{device.Name}/{node.PathName}/{property.PathName}/set").Build());
+                            }
+                            await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{Program.Settings.MQTT_BASETOPIC}/{device.Name}/{node.PathName}/{property.PathName}/poll").Build()); // This will allow us to request an update from the device
+                        }
+                    }
+                }
+
                 // Subscribe to a bunch of topics:
                 await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{Program.Settings.MQTT_BASETOPIC}/$broadcast/#").Build()); // Example: homie/$broadcast/alert ← "Intruder detected"
                 await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{BasePublishingTopic}/get/#").Build());    // Used for get-/setting data that's not part of the Homie specs, like
                 await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{BasePublishingTopic}/set/#").Build());    // config files, config and such.
                 await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{BasePublishingTopic}/RAW/in").Build());   // Allows the user to send raw bytes to the CI
                 await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{BasePublishingTopic}/raw/in").Build());   // Same as RAW, but the bytes are now human readable strings "06 C1 04 ..."
+                await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{BasePublishingTopic}/cmd/#").Build());    // A way to receive simple commands like "exit" 
                 //await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{BasePublishingTopic}/shell/#").Build());  // Runs shell commands on the system. Potensial SECURITY HOLE
 
                 while (mqttClient.IsConnected) // As long as we are connected, we need to send the stats periodically
@@ -282,6 +194,115 @@ namespace xComfortWingman
             catch (Exception exception)
             {
                 LogException(exception);
+            }
+        }
+      
+        private static async Task MqttClient_ApplicationMessageReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
+        {
+            // These are the topics we are subscribing to:
+            //$"homie/DimKitchen/Lights/DimLevel/set"                               // Used to set a new value for that node/property
+            //$"homie/DimKitchen/Lights/DimLevel/poll"                              // This will allow us to request an update from the device
+            //$"homie/$broadcast/#"                                                 // Example: homie/$broadcast/alert ← "Intruder detected"
+            //$"homie/xComfort/get/#"                                                                    // Used for get-/setting data that's not part of the Homie specs, like
+            //$"homie/xComfort/set/#"                                                                    // config files, config and such.
+            //$"homie/xComfort/RAW/in"                                                                   // Allows the user to send raw bytes to the CI
+            //$"homie/xComfort/raw/in"                                                                   // Same as RAW, but the bytes are now human readable strings "06 C1 04 ..."
+            //$"homie/xComfort/cmd/#"                                                                    // A way to receive simple commands like "exit" 
+            //$"homie/xComfort/shell/#"                                                                  // Runs shell commands on the system. Potensial SECURITY HOLE
+
+            // Technically, it's these formats, but they are not as nice to read:
+            //$"{Program.Settings.MQTT_BASETOPIC}/{device.Name}/{node.PathName}/{property.PathName}/set" (and poll)
+            //$"{Program.Settings.MQTT_BASETOPIC}/$broadcast/#"
+            //$"{BasePublishingTopic}/get/#" (and set/# and RAW/in and raw/in and cmd/# and shell/#)
+            
+            string[] topics = e.ApplicationMessage.Topic.Split("/"); // Split the topic into levels
+
+            // (We trust that the MQTT subscription makes sure that we don't get any unwanted suff, so we don't have to check that ourselves.)
+            switch (topics[1]) // This will always be "$broadcast", "xComfort" or the name of a device.
+            {
+                case "$broadcast":      // It's a broadcast message for all devices
+                    {
+                        // We have no real use for this at the moment, but we'll display and log it anyway.
+                        DoLog($"Broadcasted message: {e.ApplicationMessage.Topic.ToString()}={e.ApplicationMessage.ConvertPayloadToString()}", 4);
+                        break;
+                    }
+                case "xComfort":    // It's one of six possible things
+                    {
+                        switch (topics[2])
+                        {
+                            case "get":
+                                {
+                                    // Get and settable
+                                    if (topics[3]=="config") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.GetSettingsAsJSON(), false);
+                                    if (topics[3] == "datapoints") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.GetDatapointFile(), false);
+
+                                    // Gettable only
+                                    if (topics[3] == "temperature") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Homie.GetStatsCPUload(), false);
+
+                                    break;
+                                }
+                            case "set":
+                                {
+                                    // Get and settable
+                                    if (topics[3] == "config") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.WriteSettingsToFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString(), false);
+                                    if (topics[3] == "datapoints") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.SetDatapointFile(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString(), false);
+
+                                    // Settable only
+                                    if (topics[3] == "datapoint") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.ImportDatapointsOneByOne(Encoding.UTF8.GetString(e.ApplicationMessage.Payload)).ToString(), false);
+                                    break;
+                                }
+                            case "RAW":
+                                {
+                                    await CI.SendData(e.ApplicationMessage.Payload);
+                                    break;
+                                }
+                            case "raw":
+                                {
+                                    // Convert the human readable string back into the actualy bytes it represents, then sending it to the CI.
+                                    string payload = e.ApplicationMessage.ConvertPayloadToString().Replace(" ", "");
+                                    List<byte> byteList = new List<byte>();
+                                    for (int i = 0; i < payload.Length; i += 2)
+                                    {
+                                        byteList.Add(Convert.ToByte(payload.Substring(i, 2), 16));
+                                    }
+                                    await CI.SendData(byteList.ToArray());
+                                    break;
+                                }
+                            case "cmd":
+                                {
+                                    if (e.ApplicationMessage.ConvertPayloadToString() == "exit") Program.StayAlive = false;
+                                    break;
+                                }
+                            case "shell":
+                                {
+                                    // This is just a tad too much of a security risk to implement at this time.
+                                    // It might be a very useful feature, but there must be some security in place first!
+                                    // Have a look at https://loune.net/2017/06/running-shell-bash-commands-in-net-core/ for en example of how the execution can be implemented.
+                                    DoLog("Ignored request for shell: " + e.ApplicationMessage.ConvertPayloadToString(), 3);
+                                    break;
+                                }
+                            default: { break; }
+                        }
+                        break;
+                    }
+                default:    // It's a device's name, we must be more dynamic in our approach.
+                    {
+                        try
+                        {
+                            Homie.Device device = Homie.devices.Find(x => x.Name == topics[1]);
+                            Homie.Node node = device.Node.Find(x => x.PathName == topics[2]);
+                            Homie.Property property = node.PropertyList.Find(x => x.PathName == topics[3]);
+                            if (topics[4] == "set") { await Homie.UpdateSingleProperty($"{device.Name}/{node.PathName}/{property.PathName}",property,e.ApplicationMessage.ConvertPayloadToString()); }
+                            if (topics[4] == "poll") { await CI.RequestUpdateAsync(device.Datapoint.DP); }
+                            if (topics[4] != "set" && topics[4] != "poll") { DoLog($"Unknown action: {e.ApplicationMessage.Topic}"); }
+                        }
+                        catch (Exception exception)
+                        {
+                            DoLog($"Error processing MQTT message: {e.ApplicationMessage.Topic.ToString()}={e.ApplicationMessage.ConvertPayloadToString()}",5);
+                            LogException(exception);
+                        }
+                        break;
+                    }
             }
         }
 
@@ -317,7 +338,6 @@ namespace xComfortWingman
             }
         }
 
-
         public static async Task SendMQTTMessageAsync(string topic, string payload, bool retainOnServer)
         {
             await SendMQTTMessageAsync(topic, payload, retainOnServer, ++PublicationCounter);
@@ -352,56 +372,56 @@ namespace xComfortWingman
             }
         }
 
-        private async static Task PublishDeviceAttributesAsync()
-        {
-            String BaseTopic = ""; // This will be added by the SendMQTTMessageAsync method...
-            NetworkInterface networkInterface = NetworkInterface.GetAllNetworkInterfaces().Where(nic => nic.OperationalStatus == OperationalStatus.Up).FirstOrDefault();
-            string myIP = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0].ToString();
-            string myNodes = GetNodeList();
+        ////private async static Task PublishDeviceAttributesAsync()
+        ////{
+        ////    String BaseTopic = ""; // This will be added by the SendMQTTMessageAsync method...
+        ////    NetworkInterface networkInterface = NetworkInterface.GetAllNetworkInterfaces().Where(nic => nic.OperationalStatus == OperationalStatus.Up).FirstOrDefault();
+        ////    string myIP = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0].ToString();
+        ////    string myNodes = GetNodeList();
 
-            await SendMQTTMessageAsync($"{BaseTopic}$homie", Program.Settings.HOMIE_HOMIE, true);                      //homie/super-car/$homie → "2.1.0"
-            await SendMQTTMessageAsync($"{BaseTopic}$name", Program.Settings.HOMIE_NAME, true);                        //homie/super-car/$name → "Super car"
-            await SendMQTTMessageAsync($"{BaseTopic}$localip", myIP, true);                                                 //homie/super-car/$localip → "192.168.0.30"
-            await SendMQTTMessageAsync($"{BaseTopic}$mac", networkInterface.GetPhysicalAddress().ToString(), true);         //homie/super-car/$mac → "DE:AD:BE:EF:FE:ED"
-            await SendMQTTMessageAsync($"{BaseTopic}$fw/name", Program.Settings.HOMIE_FW_NAME, true);                  //homie/super-car/$fw/name → "weatherstation-firmware"
-            await SendMQTTMessageAsync($"{BaseTopic}$fw/version", Program.Settings.HOMIE_FW_VERSION, true);            //homie/super-car/$fw/version → "1.0.0"
-            await SendMQTTMessageAsync($"{BaseTopic}$nodes", myNodes, true);                                                //homie/super-car/$nodes → "wheels,engine,lights[]"
-            await SendMQTTMessageAsync($"{BaseTopic}$implementation", Program.Settings.HOMIE_IMPLEMENTATION, true);    //homie/super-car/$implementation → "esp8266"
-            await SendMQTTMessageAsync($"{BaseTopic}$stats/interval", Program.Settings.HOMIE_STATS_INTERVAL, true);    //homie/super-car/$stats/interval → "60"
-            await SendMQTTMessageAsync($"{BaseTopic}$state", "ready" , true);                                               //homie/super-car/$state → "ready"
-        }
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$homie", Program.Settings.HOMIE_HOMIE, true);                      //homie/super-car/$homie → "2.1.0"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$name", Program.Settings.HOMIE_NAME, true);                        //homie/super-car/$name → "Super car"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$localip", myIP, true);                                                 //homie/super-car/$localip → "192.168.0.30"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$mac", networkInterface.GetPhysicalAddress().ToString(), true);         //homie/super-car/$mac → "DE:AD:BE:EF:FE:ED"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$fw/name", Program.Settings.HOMIE_FW_NAME, true);                  //homie/super-car/$fw/name → "weatherstation-firmware"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$fw/version", Program.Settings.HOMIE_FW_VERSION, true);            //homie/super-car/$fw/version → "1.0.0"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$nodes", myNodes, true);                                                //homie/super-car/$nodes → "wheels,engine,lights[]"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$implementation", Program.Settings.HOMIE_IMPLEMENTATION, true);    //homie/super-car/$implementation → "esp8266"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$stats/interval", Program.Settings.HOMIE_STATS_INTERVAL, true);    //homie/super-car/$stats/interval → "60"
+        ////    await SendMQTTMessageAsync($"{BaseTopic}$state", "ready" , true);                                               //homie/super-car/$state → "ready"
+        ////}
 
-        private static List<PublishModel> MakeDeviceAttributes()
-        {
-            NetworkInterface networkInterface = NetworkInterface.GetAllNetworkInterfaces().Where(nic => nic.OperationalStatus == OperationalStatus.Up).FirstOrDefault();
-            string myIP = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0].ToString();
-            string myNodes = GetNodeList();
+        ////private static List<PublishModel> MakeDeviceAttributes()
+        ////{
+        ////    NetworkInterface networkInterface = NetworkInterface.GetAllNetworkInterfaces().Where(nic => nic.OperationalStatus == OperationalStatus.Up).FirstOrDefault();
+        ////    string myIP = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0].ToString();
+        ////    string myNodes = GetNodeList();
 
-            String BaseTopic = (Program.Settings.MQTT_BASETOPIC + "/" + Program.Settings.GENERAL_NAME + "/").Replace("//","/");
-            List<PublishModel> attributes = new List<PublishModel>
-            {
-                new PublishModel($"{BaseTopic}$homie", Program.Settings.HOMIE_HOMIE ),                     //homie/super-car/$homie → "2.1.0"
-                new PublishModel($"{BaseTopic}$name", Program.Settings.HOMIE_NAME ),                       //homie/super-car/$name → "Super car"
-                new PublishModel($"{BaseTopic}$localip", myIP ),                                                //homie/super-car/$localip → "192.168.0.10"
-                new PublishModel($"{BaseTopic}$mac", networkInterface.GetPhysicalAddress().ToString()),         //homie/super-car/$mac → "DE:AD:BE:EF:FE:ED"
-                new PublishModel($"{BaseTopic}$fw/name", Program.Settings.HOMIE_FW_NAME),                  //homie/super-car/$fw/name → "weatherstation-firmware"
-                new PublishModel($"{BaseTopic}$fw/version", Program.Settings.HOMIE_FW_VERSION ),           //homie/super-car/$fw/version → "1.0.0"
-                //new PublishModel($"{BaseTopic}$nodes", myNodes),                                          //homie/super-car/$nodes → "wheels,engine,lights[]"
-                new PublishModel($"{BaseTopic}$implementation", Program.Settings.HOMIE_IMPLEMENTATION ),   //homie/super-car/$implementation → "esp8266"
-                new PublishModel($"{BaseTopic}$stats/interval", Program.Settings.HOMIE_STATS_INTERVAL ),   //homie/super-car/$stats/interval → "60"
-                //new PublishModel($"{BaseTopic}$state", "ready" )                                                //homie/super-car/$state → "ready"
-            };
+        ////    String BaseTopic = (Program.Settings.MQTT_BASETOPIC + "/" + Program.Settings.GENERAL_NAME + "/").Replace("//","/");
+        ////    List<PublishModel> attributes = new List<PublishModel>
+        ////    {
+        ////        new PublishModel($"{BaseTopic}$homie", Program.Settings.HOMIE_HOMIE ),                     //homie/super-car/$homie → "2.1.0"
+        ////        new PublishModel($"{BaseTopic}$name", Program.Settings.HOMIE_NAME ),                       //homie/super-car/$name → "Super car"
+        ////        new PublishModel($"{BaseTopic}$localip", myIP ),                                                //homie/super-car/$localip → "192.168.0.10"
+        ////        new PublishModel($"{BaseTopic}$mac", networkInterface.GetPhysicalAddress().ToString()),         //homie/super-car/$mac → "DE:AD:BE:EF:FE:ED"
+        ////        new PublishModel($"{BaseTopic}$fw/name", Program.Settings.HOMIE_FW_NAME),                  //homie/super-car/$fw/name → "weatherstation-firmware"
+        ////        new PublishModel($"{BaseTopic}$fw/version", Program.Settings.HOMIE_FW_VERSION ),           //homie/super-car/$fw/version → "1.0.0"
+        ////        //new PublishModel($"{BaseTopic}$nodes", myNodes),                                          //homie/super-car/$nodes → "wheels,engine,lights[]"
+        ////        new PublishModel($"{BaseTopic}$implementation", Program.Settings.HOMIE_IMPLEMENTATION ),   //homie/super-car/$implementation → "esp8266"
+        ////        new PublishModel($"{BaseTopic}$stats/interval", Program.Settings.HOMIE_STATS_INTERVAL ),   //homie/super-car/$stats/interval → "60"
+        ////        //new PublishModel($"{BaseTopic}$state", "ready" )                                                //homie/super-car/$state → "ready"
+        ////    };
 
-            if (Program.Settings.GENERAL_DEBUGMODE)
-            {
-                foreach (PublishModel pm in attributes)
-                {
-                    DoLog(pm.PublishPath + " --> " + pm.Payload,2,true);
-                }
-            }
+        ////    if (Program.Settings.GENERAL_DEBUGMODE)
+        ////    {
+        ////        foreach (PublishModel pm in attributes)
+        ////        {
+        ////            DoLog(pm.PublishPath + " --> " + pm.Payload,2,true);
+        ////        }
+        ////    }
 
-            return attributes;
-        }
+        ////    return attributes;
+        ////}
 
         public async static Task SendInitialDataAsync()
         {
@@ -409,15 +429,15 @@ namespace xComfortWingman
             //DoLog("Publishing data structures...", false);
             try
             {
-                stopwatch.Start();
-                DoLog("Creating devices from datapoints...", false);
-                foreach (Datapoint datapoint in CI.datapoints)
-                {
-                    Homie.devices.Add(Homie.GetDeviceFromDatapoint(datapoint));
-                }
-                DoLog("OK", 3, false, 10);
-                DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                stopwatch.Reset();
+                //stopwatch.Start();
+                //DoLog("Creating devices from datapoints...", false);
+                //foreach (Datapoint datapoint in CI.datapoints)
+                //{
+                //    Homie.devices.Add(Homie.GetDeviceFromDatapoint(datapoint));
+                //}
+                //DoLog("OK", 3, false, 10);
+                //DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                //stopwatch.Reset();
 
                 stopwatch.Start();
                 DoLog("Publishing all device information...", false);
@@ -578,46 +598,46 @@ namespace xComfortWingman
         //    return nodes;
         //}
 
-        public static async Task PublishNodeAsync(Homie.NodeOld node)
-        {
-            await SendMQTTMessageAsync($"{node.PublishPath}/$name", $"{node.Name}", true);
-            await SendMQTTMessageAsync($"{node.PublishPath}/$properties", $"{node.Properties}", true);
-            await SendMQTTMessageAsync($"{node.PublishPath}/$array", $"{node.Array}", true);
-        }
+        ////public static async Task PublishNodeAsync(Homie.NodeOld node)
+        ////{
+        ////    await SendMQTTMessageAsync($"{node.PublishPath}/$name", $"{node.Name}", true);
+        ////    await SendMQTTMessageAsync($"{node.PublishPath}/$properties", $"{node.Properties}", true);
+        ////    await SendMQTTMessageAsync($"{node.PublishPath}/$array", $"{node.Array}", true);
+        ////}
 
-        public static async Task PublishPropertyAsync(Homie.PropertyOld node)
-        {
-            if (node.Name != "") await SendMQTTMessageAsync($"{node.PublishPath}/$name", $"{node.Name}", true);
-            if (node.Settable != "") await SendMQTTMessageAsync($"{node.PublishPath}/$settable", $"{node.Settable}", true);
-            if (node.Unit != "") await SendMQTTMessageAsync($"{node.PublishPath}/$unit", $"{node.Unit}", true);
-            if (node.DataType != "") await SendMQTTMessageAsync($"{node.PublishPath}/$datatype", $"{node.DataType}", true);
-            if (node.Format != "") await SendMQTTMessageAsync($"{node.PublishPath}/$format", $"{node.Format}", true);
-            if (node.Unit != "") await SendMQTTMessageAsync($"{node.PublishPath}/$unit", $"{node.Unit}", true);
-        }
+        ////public static async Task PublishPropertyAsync(Homie.PropertyOld node)
+        ////{
+        ////    if (node.Name != "") await SendMQTTMessageAsync($"{node.PublishPath}/$name", $"{node.Name}", true);
+        ////    if (node.Settable != "") await SendMQTTMessageAsync($"{node.PublishPath}/$settable", $"{node.Settable}", true);
+        ////    if (node.Unit != "") await SendMQTTMessageAsync($"{node.PublishPath}/$unit", $"{node.Unit}", true);
+        ////    if (node.DataType != "") await SendMQTTMessageAsync($"{node.PublishPath}/$datatype", $"{node.DataType}", true);
+        ////    if (node.Format != "") await SendMQTTMessageAsync($"{node.PublishPath}/$format", $"{node.Format}", true);
+        ////    if (node.Unit != "") await SendMQTTMessageAsync($"{node.PublishPath}/$unit", $"{node.Unit}", true);
+        ////}
 
-        public static async Task PublishArrayElementAsync(Homie.ArrayElement node)
-        {
-            await SendMQTTMessageAsync($"{node.PublishPath}/$name", $"{node.Name}", true);
-            await SendMQTTMessageAsync($"{node.PublishPath}/${node.PropertyName}", $"{node.Value}", true);
-        }
+        ////public static async Task PublishArrayElementAsync(Homie.ArrayElement node)
+        ////{
+        ////    await SendMQTTMessageAsync($"{node.PublishPath}/$name", $"{node.Name}", true);
+        ////    await SendMQTTMessageAsync($"{node.PublishPath}/${node.PropertyName}", $"{node.Value}", true);
+        ////}
 
-        private static async Task SendNodeDataToServerAsync()
-        {
-            foreach (Homie.NodeOld node in Homie.HomieNodes)
-            {
-                await PublishNodeAsync(node);
-            }
+        ////private static async Task SendNodeDataToServerAsync()
+        ////{
+        ////    foreach (Homie.NodeOld node in Homie.HomieNodes)
+        ////    {
+        ////        await PublishNodeAsync(node);
+        ////    }
 
-            foreach (Homie.PropertyOld node in Homie.HomieProperties)
-            {
-                await PublishPropertyAsync(node);
-            }
+        ////    foreach (Homie.PropertyOld node in Homie.HomieProperties)
+        ////    {
+        ////        await PublishPropertyAsync(node);
+        ////    }
 
-            foreach (Homie.ArrayElement node in Homie.HomieArrayElements)
-            {
-                await PublishArrayElementAsync(node);
-            }
-        }
+        ////    foreach (Homie.ArrayElement node in Homie.HomieArrayElements)
+        ////    {
+        ////        await PublishArrayElementAsync(node);
+        ////    }
+        ////}
 
         //////private static List<PublishModel> GetAllNodesAsPublication(string node)
         //////{
@@ -659,38 +679,38 @@ namespace xComfortWingman
 
         
 
-        public async static Task PublishDeviceDataAsync(Datapoint datapoint)
-        {
-            // Get the correct device type for the datapoint
-            DeviceType devicetype = CI.devicetypes.Find(x => x.Number == datapoint.Type && x.Channels.Contains(datapoint.Channel) && x.Modes.Contains(datapoint.Mode));
+        ////public async static Task PublishDeviceDataAsync(Datapoint datapoint)
+        ////{
+        ////    // Get the correct device type for the datapoint
+        ////    DeviceType devicetype = CI.devicetypes.Find(x => x.Number == datapoint.Type && x.Channels.Contains(datapoint.Channel) && x.Modes.Contains(datapoint.Mode));
 
-            // Count all datapoints that belong to this specific devicetype
-            //int devcount = CI.datapoints.Where(x => x.Type == devicetype.Number && devicetype.Modes.Contains(x.Mode) && devicetype.Channels.Contains(x.Channel)).Count();
-            List<Datapoint> dps = new List<Datapoint>(CI.datapoints.Where(x => x.Type == devicetype.Number && devicetype.Modes.Contains(x.Mode) && devicetype.Channels.Contains(x.Channel)).OrderBy(x => x.DP));
-            int devcount = dps.Count();
+        ////    // Count all datapoints that belong to this specific devicetype
+        ////    //int devcount = CI.datapoints.Where(x => x.Type == devicetype.Number && devicetype.Modes.Contains(x.Mode) && devicetype.Channels.Contains(x.Channel)).Count();
+        ////    List<Datapoint> dps = new List<Datapoint>(CI.datapoints.Where(x => x.Type == devicetype.Number && devicetype.Modes.Contains(x.Mode) && devicetype.Channels.Contains(x.Channel)).OrderBy(x => x.DP));
+        ////    int devcount = dps.Count();
 
-            int dpindex = dps.FindIndex(dp => dp.DP == datapoint.DP);
+        ////    int dpindex = dps.FindIndex(dp => dp.DP == datapoint.DP);
                        
-            // Add the properties for this node/device
-            string devProps = Homie.GetPropertiesForDeviceType(devicetype);
-            string BaseTopic = Program.Settings.MQTT_BASETOPIC + "/" + Program.Settings.GENERAL_NAME;
-            string devName = datapoint.Name;
-            Homie.NodeOld node = new Homie.NodeOld { PublishPath = BaseTopic, Name = devName, Array = $"0-{devcount - 1}", Properties = devProps };
+        ////    // Add the properties for this node/device
+        ////    string devProps = Homie.GetPropertiesForDeviceType(devicetype);
+        ////    string BaseTopic = Program.Settings.MQTT_BASETOPIC + "/" + Program.Settings.GENERAL_NAME;
+        ////    string devName = datapoint.Name;
+        ////    Homie.NodeOld node = new Homie.NodeOld { PublishPath = BaseTopic, Name = devName, Array = $"0-{devcount - 1}", Properties = devProps };
                        
-            foreach (string p in devProps.Replace("[]", "").Split(","))
-            {
-                // Get properties for the device type. (This will unfortunately be repeated for each device, as we don't know if this is the first device of its type.
-                Homie.PropertyOld property = Homie.GetHomiePropertyFor(devName, BaseTopic + "/" + p);
+        ////    foreach (string p in devProps.Replace("[]", "").Split(","))
+        ////    {
+        ////        // Get properties for the device type. (This will unfortunately be repeated for each device, as we don't know if this is the first device of its type.
+        ////        Homie.PropertyOld property = Homie.GetHomiePropertyFor(devName, BaseTopic + "/" + p);
 
-                string dataAsString = "0";
-                // If the datapoint has data already attached to it, use that!
-                if (datapoint.LatestDataValues != null) dataAsString = CI.GetDataFromPacket(datapoint.LatestDataValues.MGW_RX_DATA, datapoint.LatestDataValues.MGW_RX_DATA_TYPE, p);
+        ////        string dataAsString = "0";
+        ////        // If the datapoint has data already attached to it, use that!
+        ////        if (datapoint.LatestDataValues != null) dataAsString = CI.GetDataFromPacket(datapoint.LatestDataValues.MGW_RX_DATA, datapoint.LatestDataValues.MGW_RX_DATA_TYPE, p);
 
-                Homie.ArrayElement homieArrayElement = new Homie.ArrayElement { Name = datapoint.Name, PropertyName = p, Value = dataAsString, PublishPath = $"{BaseTopic}/{devName}_{devcount}", BelongsToDP = datapoint.DP, ArrayIndex = devcount };
-                await MQTT.PublishPropertyAsync(property);
-                await MQTT.PublishArrayElementAsync(homieArrayElement);
-            }
-        }
+        ////        Homie.ArrayElement homieArrayElement = new Homie.ArrayElement { Name = datapoint.Name, PropertyName = p, Value = dataAsString, PublishPath = $"{BaseTopic}/{devName}_{devcount}", BelongsToDP = datapoint.DP, ArrayIndex = devcount };
+        ////        await MQTT.PublishPropertyAsync(property);
+        ////        await MQTT.PublishArrayElementAsync(homieArrayElement);
+        ////    }
+        ////}
 
 
         public static async Task PublishDeviceAsync(Homie.Device device)
@@ -731,11 +751,6 @@ namespace xComfortWingman
                         await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$unit", property.Unit, r);         //homie/DimKitchen/lights/intensity/$unit       =   "%"
                         await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$datatype", property.DataType, r); //homie/DimKitchen/lights/intensity/$datatype   =   "integer"
                         await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$format", property.Format, r);     //homie/DimKitchen/lights/intensity/$format     =   "0:100"
-
-                        if (property.Settable=="true")
-                        {
-                            await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic($"{device.Name}/{node.PathName}/{property.PathName}/set").Build());
-                        }
                     }
                 }
             } catch (Exception exception)
