@@ -45,8 +45,11 @@ namespace xComfortWingman
             }
             if (IllegalArguments) { return; }
 
+            Menu.MainMenu();
+
 
             DoLog("Starting BachelorPad...",4);
+            if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
 
             //if(Settings.DEBUGMODE) { Console.WriteLine(Settings.GetSettingsAsJSON()); Console.ReadLine(); }
 
@@ -57,11 +60,13 @@ namespace xComfortWingman
                 Settings.MQTT_BASETOPIC = "debugdata";
                 if (ImportDatapointsFromFile("C:\\misc\\" + Settings.GENERAL_DATAPOINTS_FILENAME))
                 {
+                    CreateDevicesOutOfDatapoints();
                     MQTT.RunMQTTClientAsync().Wait();
-                    MQTT.PublishDeviceAsync(Homie.GetDeviceFromDatapoint(CI.datapoints[2])).Wait();
-                    Console.WriteLine($"Publications: {MQTT.PublicationCounter}");
 
-                   // CI.FakeData(new byte[] { 0x0D, 0xC1, 0x31, 0x62, 0x17, 0x00, 0x00, 0xC9, 0x00, 0x00, 0x44, 0x24, 0x01 }).Wait();
+                    MQTT.PublishDeviceAsync(Homie.CreateDeviceFromDatapoint(CI.datapoints[4])).Wait();
+                    Console.WriteLine($"Publications: {MQTT.PublicationCounter}");
+                    CI.FakeData(new byte[] { 0x0D, 0xC1, 0x05, 0x70, 0x00, 0x62, 0x00, 0x00, 0x00, 0x00, 0x32, 0x10, 0x0B }).Wait();
+                    //CI.FakeData(new byte[] { 0x0D, 0xC1, 0x31, 0x62, 0x17, 0x00, 0x00, 0xC9, 0x00, 0x00, 0x44, 0x24, 0x01 }).Wait();
                     while (StayAlive)
                     {
                         // Nada!
@@ -78,11 +83,10 @@ namespace xComfortWingman
 
             BootWithoutError = ImportDatapointsFromFile(Settings.GENERAL_DATAPOINTS_FILENAME);
             if (BootWithoutError) { CreateDevicesOutOfDatapoints(); }
-                if (BootWithoutError) { MQTT.RunMQTTClientAsync().Wait(); }
+            if (BootWithoutError) { MQTT.RunMQTTClientAsync().Wait(); }
             if (BootWithoutError) { CI.ConnectToCI().Wait(); }
             if (BootWithoutError)
             {
-                DoLog("Startup complete!", 4);
                 while (StayAlive)
                 {
                     // Just chill, other threads are monitoring communications...
@@ -140,7 +144,8 @@ namespace xComfortWingman
                 fileStream.Close();
                 DoLog("OK", 3, false, 10);
                 DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                DoLog($"Total number of datapoints: {CI.datapoints.Count}");
+                DoLog($"Total number of datapoints: ", false);
+                DoLog($"{ CI.datapoints.Count}", 3, true, 10);
                 stopwatch.Reset();
 
                 return true;
@@ -219,12 +224,13 @@ namespace xComfortWingman
             DoLog("Creating devices from datapoints...", false);
             foreach (Datapoint datapoint in CI.datapoints)
             {
-                Homie.devices.Add(Homie.GetDeviceFromDatapoint(datapoint));
+                Homie.devices.Add(Homie.CreateDeviceFromDatapoint(datapoint));
             }
             DoLog("OK", 3, false, 10);
             DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
             stopwatch.Reset();
-            DoLog($"Total number of devices: {Homie.devices.Count}");
+            DoLog($"Total number of devices: ", false);
+            DoLog($"{ Homie.devices.Count}",3,true,10);
         }
         #endregion
 

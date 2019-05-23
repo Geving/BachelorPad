@@ -40,6 +40,7 @@ namespace xComfortWingman
         public bool GENERAL_DEBUGMODE { get; set; } = true;
         public String GENERAL_DATAPOINTS_FILENAME { get; set; } = "Datenpunkte.txt";
         public String GENERAL_NAME { get; set; } = "xComfort";
+        public bool GENERAL_FROM_FILE { get; set; } = false;
 
         // MQTT related settings
         public MQTT_CONNECTION_METHOD MQTT_CONNECTION_METHOD { get; set; } = MQTT_CONNECTION_METHOD.TCP;
@@ -89,6 +90,7 @@ namespace xComfortWingman
             if (VerifySettingsFile())
             {
                 LoadSettings();
+                GENERAL_FROM_FILE = true;
             }
             else
             {

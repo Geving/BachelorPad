@@ -170,7 +170,7 @@ namespace xComfortWingman
                         IAsyncResult ar = null;
                         readyToTransmit = true;
                         int startTime = Environment.TickCount;
-                        while (true)
+                        while (Program.StayAlive)
                         {
                             if (ar == null)
                             {
@@ -344,7 +344,7 @@ namespace xComfortWingman
             if (Program.Settings.GENERAL_RAW_ENABLED)
             {
                 DoLog("Sending RAW data via MQTT...", 2);
-                await MQTT.SendMQTTMessageAsync("RAW", FormatByteForPrint(dataFromCI, true), false);
+                await MQTT.SendMQTTMessageAsync(Homie.SanitiseString(Program.Settings.GENERAL_NAME) + "/RAW", FormatByteForPrint(dataFromCI, true), false);
                 //DoLog("OK", 1, true, 10);
             }
 
@@ -449,7 +449,7 @@ namespace xComfortWingman
             myCommand[9] = Convert.ToByte(shiftedCounter);
             messageHistory[sequenceCounter] = myCommand;
             sequenceCounter++;
-            if (sequenceCounter > 15) { sequenceCounter = 0; } // Reset to 0 in order to keep the size to 4 bits.
+            if (sequenceCounter >= 15) { sequenceCounter = 0; } // Reset to 0 in order to keep the size to 4 bits.
 
             //Send the data
             Console.WriteLine();
@@ -1048,8 +1048,14 @@ namespace xComfortWingman
                                                         //Mode 0 (Send switching commands): MGW_RDT_RC_DATA(temperature and wheel; MGW_RX_MSG_TYPE = MGW_RMT_TOO_COLD / MGW_RMT_TOO_WARM)
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
-                                                        //BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
-                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket);
+                                                        //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
+                                                        // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
                                                         break;
                                                     }
                                                 default:
@@ -1057,8 +1063,17 @@ namespace xComfortWingman
                                                         //Mode 1 (Send temperature value):  MGW_RDT_RC_DATA(temperature and wheel; MGW_RX_MSG_TYPE = MGW_RMT_VALUE)
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
-                                                        //BroadcastChange(datapoint.DP, ("Temperature: " + data[1] + ", Wheel position: " + data[0]));
-                                                        BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket);
+                                                        //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
+
+                                                        // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+
+
                                                         break;
                                                     }
                                             }
@@ -1073,7 +1088,7 @@ namespace xComfortWingman
                                                         //Mode 0 (Send switching commands): MGW_RDT_FLOAT(humidity value in percent; MGW_RX_MSG_TYPE = MGW_RMT_SWITCH_ON / MGW_RMT_SWITCH_OFF)
                                                         double data = new double();
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleData);
-                                                        BroadcastChange(datapoint.DP, data.ToString(), rxPacket);
+                                                        BroadcastChange(datapoint.DP, data.ToString(), rxPacket); 
                                                         break;
                                                     }
                                                 default:
@@ -1310,29 +1325,37 @@ namespace xComfortWingman
 
         public static async Task RequestUpdateAsync(int DP)
         {
-            byte[] myCommand = new byte[myDevice.GetMaxOutputReportLength()];  //.ConnectedDeviceDefinition.WriteBufferSize.Value]; 
-            myCommand[0] = 0x00; // This one is not interpreted as data, it is ignored.
-            myCommand[1] = 0x09; // This is the length of the packet. It can be dynamic, but it's also safe to use a fixed value of 0x09 and pad with 0x00.
-            myCommand[2] = 0xB1; // This indicates that we want to control a datapoint.
-            myCommand[3] = Convert.ToByte(DP); // The datapoint to control.
-            myCommand[4] = PT_TX.MGW_TX_EVENT.MGW_TE_REQUEST; // What kind of "event" we want the datapoint to perform, such as set mode/state/level
-            myCommand[5] = 0x00; // Event data, such as "ON"/"OFF"/"42%"
-            myCommand[6] = 0x00; // Sometimes event data requires more than a single byte.
-            myCommand[7] = 0x00; // ---- || -----
-            myCommand[8] = 0x00; // ---- || -----
-            myCommand[9] = 0x00; // Sequence number + priority (If used) 0x00 is a safe value in any case.
+            try
+            {
 
-            //Update the sequence counter and history
-            int shiftedCounter = sequenceCounter << 4; // This bit shift places the value in the upper nibble, allowing the lower nibble to be used as priority
-            myCommand[9] = Convert.ToByte(shiftedCounter);
-            messageHistory[sequenceCounter] = myCommand;
-            sequenceCounter++;
-            if (sequenceCounter > 15) { sequenceCounter = 0; } // Reset to 0 in order to keep the size to 4 bits.
+                byte[] myCommand = new byte[myDevice.GetMaxOutputReportLength()];  //.ConnectedDeviceDefinition.WriteBufferSize.Value]; 
+                myCommand[0] = 0x00; // This one is not interpreted as data, it is ignored.
+                myCommand[1] = 0x09; // This is the length of the packet. It can be dynamic, but it's also safe to use a fixed value of 0x09 and pad with 0x00.
+                myCommand[2] = 0xB1; // This indicates that we want to control a datapoint.
+                myCommand[3] = Convert.ToByte(DP); // The datapoint to control.
+                myCommand[4] = PT_TX.MGW_TX_EVENT.MGW_TE_REQUEST; // What kind of "event" we want the datapoint to perform, such as set mode/state/level
+                myCommand[5] = 0x00; // Event data, such as "ON"/"OFF"/"42%"
+                myCommand[6] = 0x00; // Sometimes event data requires more than a single byte.
+                myCommand[7] = 0x00; // ---- || -----
+                myCommand[8] = 0x00; // ---- || -----
+                myCommand[9] = 0x00; // Sequence number + priority (If used) 0x00 is a safe value in any case.
 
-            //Send the data
-            Console.WriteLine();
-            PrintByte(myCommand, "Outgoing data");
-            await SendThenBlockTransmit(myCommand);
+                //Update the sequence counter and history
+                int shiftedCounter = sequenceCounter << 4; // This bit shift places the value in the upper nibble, allowing the lower nibble to be used as priority
+                myCommand[9] = Convert.ToByte(shiftedCounter);
+                messageHistory[sequenceCounter] = myCommand;
+                sequenceCounter++;
+                if (sequenceCounter >= 15) { sequenceCounter = 0; } // Reset to 0 in order to keep the size to 4 bits.
+
+                //Send the data
+                Console.WriteLine();
+                PrintByte(myCommand, "Outgoing data");
+                await SendThenBlockTransmit(myCommand);
+            } catch (Exception exception)
+            {
+                DoLog("Error requesting update for DP " + DP,5);
+                LogException(exception);
+            }
         }
 
         #region "Helpers"
