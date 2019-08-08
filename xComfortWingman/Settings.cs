@@ -55,6 +55,7 @@ namespace xComfortWingman
         public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/#/be/subscribed/to" };
 
         // MQTT HOMIE related
+        public bool HOMIE_USE_HOMIE { get; set; } = true;
         public string HOMIE_HOMIE { get; set; } = "3.0"; //{ $"{BaseTopic}$homie", "3.0" },
         public string HOMIE_NAME { get; set; } = "xComfort";    //{ $"{BaseTopic}$name", "3.0" },
         //public string HOMIE_LOCALIP { get; set; }                //{ $"{BaseTopic}$localip", "3.0" },
@@ -66,6 +67,8 @@ namespace xComfortWingman
         public string HOMIE_STATS_INTERVAL { get; set; } = "60";   //{ $"{BaseTopic}$stats/interval", "60" },
         //public string HOMIE_STATE { get; set; }                  //{ $"{BaseTopic}$state", "ready" }
 
+        //Simple JSON related settings
+        public bool BASIC_USE_BASIC { get; set; } = false;
 
         // Communication Interface related settings
         public CI_CONNECTION_MODE CI_CONNECTION_MODE { get; set; } = CI_CONNECTION_MODE.USB_MODE;

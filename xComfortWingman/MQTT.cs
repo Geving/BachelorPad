@@ -24,6 +24,8 @@ namespace xComfortWingman
         public static int ReconnectionFailures = 0;
         private static MqttClientOptions clientOptions;
         public static bool AutoReconnect = false;
+        public static bool UseHomie = Program.Settings.HOMIE_USE_HOMIE;
+        public static bool UseBasic = Program.Settings.BASIC_USE_BASIC;
 
         public static async Task RunMQTTClientAsync()
         {
@@ -140,10 +142,18 @@ namespace xComfortWingman
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
             DoLog("Updating state for all devices...", false);
-            foreach (Homie.Device device in Homie.devices)
+            if (UseHomie)
             {
-                device.State = "disconnected";
-                await SendMQTTMessageAsync($"{device.Name}/$state", device.State, true);
+                foreach (Homie.Device device in Homie.devices)
+                {
+                    device.State = "disconnected";
+                    await SendMQTTMessageAsync($"{device.Name}/$state", device.State, true);
+                }
+            }
+
+            if (usebasic)
+            {
+
             }
             DoLog("OK", 3, false, 10);
             DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
