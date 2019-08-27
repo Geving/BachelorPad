@@ -14,6 +14,12 @@ namespace xComfortWingman
         public static bool StayAlive = true;
         static void Main(string[] args)
         {
+            Basic basic = new Basic();
+            //Basic.Device newDevice = new Basic.Device("My dimmer", ,
+            //Basic.Device myDev = new DevType.DimmingActuator();
+            //Basic.Device device = new Basic.Device.Ds();
+
+
             // Handling CLI arguments
             foreach (string arg in args)
             {

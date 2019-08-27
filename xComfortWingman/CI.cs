@@ -1049,13 +1049,26 @@ namespace xComfortWingman
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
                                                         //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
-                                                        // Homie specific workaround because Room Controllers sends two pieces of data at once.
-                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
-                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
-                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
-                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        if (Program.Settings.BASIC_USE_BASIC)
+                                                        {
+                                                            // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                                                            Simple.Device device = (Simple.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                            Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                            Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                            property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        }
+                                                        else
+                                                        {
+                                                            // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                                                            Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                            Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                            Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                            property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        }
                                                         break;
                                                     }
                                                 default:
@@ -1065,15 +1078,25 @@ namespace xComfortWingman
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
                                                         //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
 
-                                                        // Homie specific workaround because Room Controllers sends two pieces of data at once.
-                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
-                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
-                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
-                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
-
-
+                                                        if (Program.Settings.BASIC_USE_BASIC)
+                                                        {
+                                                            Simple.Device device = (Simple.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                            Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                            Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                            property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        }
+                                                        else
+                                                        {
+                                                            // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                                                            Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                            Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                            Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                            property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        }
                                                         break;
                                                     }
                                             }
