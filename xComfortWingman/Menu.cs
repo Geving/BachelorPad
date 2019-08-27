@@ -21,7 +21,7 @@ namespace xComfortWingman
             Console.WriteLine("\t -nope \tDoes nothing...");
         }
 
-        public static void MainMenu()
+        public static int MainMenu()
         {
             def.ResetToDefault();
             Console.Clear();
@@ -31,7 +31,7 @@ namespace xComfortWingman
             Console.WriteLine($"");
             Console.WriteLine($"\t1. Start (default)");
             Console.WriteLine($"\t2. Settings");
-            Console.WriteLine($"\t3. About");
+            //Console.WriteLine($"\t3. About");
             Console.WriteLine($"\t0. Exit");
             Console.WriteLine($"");
             string selection = Console.ReadKey().KeyChar.ToString();
@@ -40,21 +40,21 @@ namespace xComfortWingman
                 case "\r":
                 case "1":
                     {
-                        return;
+                        return 1;
                     }
                 case "2":
                     {
                         SettingsMenu();
                         break;
                     }
-                case "3":
-                    {
+                //case "3":
+                //    {
                        
-                        break;
-                    }
+                //        break;
+                //    }
                 case "0":
                     {
-                        return; // Exit!
+                        return 0; // Exit!
                     }
                 default:
                     {
@@ -63,8 +63,7 @@ namespace xComfortWingman
                         break;
                     }
             }
-            MainMenu();
-
+            return MainMenu();
         }
 
         public static void SettingsMenu()

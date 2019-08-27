@@ -94,7 +94,7 @@ namespace xComfortWingman
             public string Implementation  { get; set; } =  Program.Settings.HOMIE_IMPLEMENTATION;       //homie/DimKitchen/$implementation	"xComfort"
             public string Stats_interval  { get; set; } =   Program.Settings.HOMIE_STATS_INTERVAL;      //homie/DimKitchen/$stats/interval	"60"
             public string State  { get; set; }                                                          //homie/DimKitchen/$state			"ready"
-
+            public bool Published { get; set; } = false;
             public List<Node> Node { get; set; } = new List<Node>();
 
             // Not part of the Homie specs
@@ -120,7 +120,7 @@ namespace xComfortWingman
             public static readonly Node nodeSwitching = new Node { PathName= "power", Name = "Switching actuator", Type = "Toggle", Properties = "power", PropertyList = new List<Property> {  Properties.propPower } };
             public static readonly Node nodeDimming = new Node { PathName = "dimlevel", Name = "Dimming actuator", Type = "Dimmer", Properties = "dimlevel", PropertyList = new List<Property> {  Properties.propDimlevel } };
             public static readonly Node nodeJalousie = new Node { PathName = "jalousie", Name = "Jalousie actuator", Type = "Jalousie", Properties = "jalousie", PropertyList = new List<Property>{ Properties.propJalousie } };
-            public static readonly Node nodeTemperature = new Node { PathName = "temperature", Name = "Temperature", Type = "Temp", Properties = "temperature", PropertyList = new List<Property> {  Properties.propTemperature } };
+            public static readonly Node nodeTemperature = new Node { PathName = "temperature", Name = "Temperaturez", Type = "Temp", Properties = "temperature", PropertyList = new List<Property> {  Properties.propTemperature } };
             public static readonly Node nodeHumidity = new Node { PathName = "humidity", Name = "Humidity", Type = "Humidity", Properties = "humidity", PropertyList = new List<Property> { Properties.propHumidity } };
             public static readonly Node nodeWheelPosition = new Node { PathName = "wheelposition", Name = "WheelPosition", Type = "Wheel", Properties = "wheelposition", PropertyList = new List<Property> {  Properties.propWheelposition } };
             public static readonly Node nodeButtonState = new Node { PathName = "buttonstate", Name = "ButtonState", Type = "Button", Properties = "buttonstate", PropertyList = new List<Property> {  Properties.propButtonstate } };
@@ -150,14 +150,14 @@ namespace xComfortWingman
         public class Properties
         {
             public static readonly Property propPower = new Property { PathName="power", Name = "Power state", Settable = "true", DataType = "boolean" };
-            public static readonly Property propDimlevel = new Property { PathName = "dimlevel", Name = "Level", Settable = "true", Unit = "%", DataType = "integer", Format = "0-100"};
+            public static readonly Property propDimlevel = new Property { PathName = "dimlevel", Name = "Level", Settable = "true", Unit = "%", DataType = "integer", Format = "0:100"};
             public static readonly Property propJalousie = new Property { PathName = "jalousie", Name = "Shutter state", Settable = "true", DataType = "string" };
             public static readonly Property propButtonstate = new Property { PathName = "buttonstate", Name = "Button state", Settable = "false", DataType = "string" };
             public static readonly Property propWheelposition = new Property { PathName = "wheelposition", Name = "Wheel setting", Settable = "false", DataType = "float", Format = "-15:3" };
-            public static readonly Property propTemperature = new Property { PathName = "temperature", Name = "Temperature reading", Settable = "false", DataType = "float", Format= "-40:180" };
-            public static readonly Property propHumidity = new Property { PathName = "humidity", Name = "Humidity reading", Settable = "false", Unit = "%", DataType = "integer", Format = "0-100" };
-            public static readonly Property propBattery = new Property { PathName = "battery", Name = "Battery level", Settable = "false", DataType = "integer", Format = "0-10" };
-            public static readonly Property propSignal = new Property { PathName = "signal", Name = "Signal strength", Settable = "false", Unit = "-dBm", DataType = "integer", Format = "0-120" };
+            public static readonly Property propTemperature = new Property { PathName = "temperature", Name = "Temperature reading", Settable = "false", Unit = "°C", DataType = "float", Format= "-40:180" };
+            public static readonly Property propHumidity = new Property { PathName = "humidity", Name = "Humidity reading", Settable = "false", Unit = "%", DataType = "integer", Format = "0:100" };
+            public static readonly Property propBattery = new Property { PathName = "battery", Name = "Battery level", Settable = "false", DataType = "integer", Format = "0:10" };
+            public static readonly Property propSignal = new Property { PathName = "signal", Name = "Signal strength", Settable = "false", Unit = "-dBm", DataType = "integer", Format = "0:120" };
         }
 
         #region "Device helpers"
@@ -241,9 +241,33 @@ namespace xComfortWingman
                     case "RSSI": { node.Value = packet.MGW_RX_RSSI.ToString(); break; }
                     case "Battery": { node.Value = packet.MGW_RX_BATTERY.ToString(); break; }
                     case "Dimmer": { node.Value = packet.MGW_RX_INFO_SHORT.ToString(); break; }
+                    case "RC1":
+                        {
+                            double[] data = new double[2];
+                            double[] doubleArrayData = new double[] { };
+                            data = CI.GetDataFromPacket(packet.MGW_RX_DATA, packet.MGW_RX_DATA_TYPE, doubleArrayData);
+
+                            // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                            
+                            Homie.Node tmpnode = device.Node.Find(x => x.PathName == "roomcontroller1");
+                            //Homie.Property property = tmpnode.PropertyList.Find(x => x.PathName == "temperature");
+                            //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                            //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1", property, data[1].ToString()).Wait();
+                            //property = tmpnode.PropertyList.Find(x => x.PathName == "wheelposition");
+                            //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                            //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1", property, data[0].ToString()).Wait();
+
+                            MyLogger.DoLog($"Updating {node.Type} data[0] for {device.Name}'s {node.Name}: {data[0].ToString()}...", 4);
+                            await MQTT.SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{node.PropertyList[0].PathName}", data[1].ToString(), true);
+
+                            MyLogger.DoLog($"Updating {node.Type} data[1] for {device.Name}'s {node.Name}: {data[1].ToString()}...", 4);
+                            await MQTT.SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{node.PropertyList[1].PathName}", data[0].ToString(), true);
+                            return;
+                            // DO NOT EXIT THIS SWITCH NORMALLY! We have already sent our data...
+                        }
                     default: { node.Value = CI.GetDataFromPacket(packet.MGW_RX_DATA, packet.MGW_RX_DATA_TYPE, ""); break; }
                 }
-                MyLogger.DoLog($"Updating data for {device.Name}'s {node.Name}: {node.Value}...",4);
+                MyLogger.DoLog($"Updating '{node.Type}' type data for {device.Name}'s {node.Name}: {node.Value}...",4);
                 await MQTT.SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{node.PropertyList[0].PathName}", node.Value, true);
             }
         }
@@ -337,7 +361,7 @@ namespace xComfortWingman
                     }
                 case "intensity":
                     {
-                        return new Property { Name = propertyName, Settable = "true", Unit = "%", DataType = "boolean", Format = "0-100", PublishPath = publishPath };
+                        return new Property { Name = propertyName, Settable = "true", Unit = "%", DataType = "boolean", Format = "0:100", PublishPath = publishPath };
                     }
                 case "jalousie":
                     {
@@ -357,15 +381,15 @@ namespace xComfortWingman
                     }
                 case "humidity":
                     {
-                        return new Property { Name = propertyName, Settable = "false", Unit = "%", DataType = "integer", Format = "0-100", PublishPath = publishPath };
+                        return new Property { Name = propertyName, Settable = "false", Unit = "%", DataType = "integer", Format = "0:100", PublishPath = publishPath };
                     }
                 case "battery":
                     {
-                        return new Property { Name = propertyName, Settable = "false", DataType = "integer", Format = "0-10", PublishPath = publishPath };
+                        return new Property { Name = propertyName, Settable = "false", DataType = "integer", Format = "0:10", PublishPath = publishPath };
                     }
                 case "signal":
                     {
-                        return new Property { Name = propertyName, Settable = "false", Unit = "-dBm", DataType = "integer", Format = "0-120", PublishPath = publishPath };
+                        return new Property { Name = propertyName, Settable = "false", Unit = "-dBm", DataType = "integer", Format = "0:120", PublishPath = publishPath };
                     }
                 default:
                     {

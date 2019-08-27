@@ -1048,14 +1048,18 @@ namespace xComfortWingman
                                                         //Mode 0 (Send switching commands): MGW_RDT_RC_DATA(temperature and wheel; MGW_RX_MSG_TYPE = MGW_RMT_TOO_COLD / MGW_RMT_TOO_WARM)
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
+                                                        BroadcastChange(datapoint.DP, data[0].ToString() + ";" + data[1].ToString(), rxPacket);
                                                         //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
                                                         // Homie specific workaround because Room Controllers sends two pieces of data at once.
-                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
-                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
-                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
-                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        //Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                        //Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                        //Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                        //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                        //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1", property, data[1].ToString()).Wait();
+                                                        //property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                        //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1", property, data[0].ToString()).Wait();
+
                                                         break;
                                                     }
                                                 default:
@@ -1064,14 +1068,17 @@ namespace xComfortWingman
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
                                                         //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
+                                                        BroadcastChange(datapoint.DP, data[0].ToString() + ";" + data[1].ToString(), rxPacket);
 
                                                         // Homie specific workaround because Room Controllers sends two pieces of data at once.
-                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
-                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
-                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
-                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        //Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                        //Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                        //Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                        ////Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                        //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1", property, data[1].ToString()).Wait();
+                                                        //property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                        ////Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        //Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1", property, data[0].ToString()).Wait();
 
 
                                                         break;
@@ -1365,7 +1372,7 @@ namespace xComfortWingman
         //Now, the method returns the needed data type based on the calling signature.
         //We can retireve data as Double, an array of Double, and string
 
-        static double[] GetDataFromPacket(byte[] mgw_rx_data, byte mgw_rx_data_type, double[] data)
+        public static double[] GetDataFromPacket(byte[] mgw_rx_data, byte mgw_rx_data_type, double[] data)
         {
             switch (mgw_rx_data_type)
             {

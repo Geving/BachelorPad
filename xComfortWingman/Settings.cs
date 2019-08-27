@@ -44,8 +44,8 @@ namespace xComfortWingman
 
         // MQTT related settings
         public MQTT_CONNECTION_METHOD MQTT_CONNECTION_METHOD { get; set; } = MQTT_CONNECTION_METHOD.TCP;
-        public string MQTT_SERVER_WEBSOCKET { get; set; } = "destiny.geving.it:1883/mqtt";
-        public string MQTT_SERVER_TCP { get; set; } = "destiny.geving.it";
+        public string MQTT_SERVER_WEBSOCKET { get; set; } = "127.0.0.1/mqtt"; //"destiny.geving.it:1883/mqtt";
+        public string MQTT_SERVER_TCP { get; set; } = "127.0.0.1"; //"destiny.geving.it";
         public string MQTT_CLIENT_ID { get; set; } = "bachelorpad_%rnd%";
         public string MQTT_CRED_USERNAME { get; set; } = "";
         public string MQTT_CRED_PASSWORD { get; set; } = "";
