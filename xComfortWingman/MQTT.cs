@@ -184,7 +184,7 @@ namespace xComfortWingman
                 // Time to tell everyone about our devices, and set up a subscription for that device if needed.
                 foreach (Homie.Device device in Homie.devices)
                 {
-                    await MQTT.PublishDeviceAsync(device);                  // Publishes a LOT of information
+                    await MQTT.PublishHomieDeviceAsync(device);                  // Publishes a LOT of information
                     foreach (Homie.Node node in device.Node)
                     {
                         foreach (Homie.Property property in node.PropertyList)
@@ -328,7 +328,7 @@ namespace xComfortWingman
                                         DoLog("Re-publishing all devices...", false);
                                         foreach (Homie.Device device in Homie.devices)
                                         {
-                                            await MQTT.PublishDeviceAsync(device);
+                                            await MQTT.PublishHomieDeviceAsync(device);
                                         }
                                         DoLog("Done", 3, true, 10);
                                     }
@@ -534,52 +534,66 @@ namespace xComfortWingman
             return nodes;
         }
 
-        public static async Task PublishDeviceAsync(Homie.Device device)
+        public static async Task PublishHomeAssistantDeviceAsync(HomeAssistant.Device device)
         {
-            try
+            try 
             {
-                
-                bool r = true;
-                //                                                                                                                                DEVICE
-
-                await SendMQTTMessageAsync($"{device.Name}/$homie", device.Homie, r);                                                     //homie/DimKitchen/$homie			              =   3.0.1	
-                await SendMQTTMessageAsync($"{device.Name}/$name", device.Name, r);                                                       //homie/DimKitchen/$name			              =   Kitchen lights	
-                await SendMQTTMessageAsync($"{device.Name}/$localip", device.Localip, r);                                                 //homie/DimKitchen/$localip			          =   0.0.0.0	
-                await SendMQTTMessageAsync($"{device.Name}/$mac", device.Mac, r);                                                         //homie/DimKitchen/$mac				          =   00:00:00:00:00:00
-                await SendMQTTMessageAsync($"{device.Name}/$fw/name", device.Fw_name, r);                                                 //homie/DimKitchen/$fw/name			          =   BachelorPad
-                await SendMQTTMessageAsync($"{device.Name}/$fw/version", device.Fw_version, r);                                           //homie/DimKitchen/$fw/version		          =   1.0.0	
-                await SendMQTTMessageAsync($"{device.Name}/$nodes", device.Nodes, r);                                                     //homie/DimKitchen/$nodes			              =   lights,signal	
-                await SendMQTTMessageAsync($"{device.Name}/$implementation", device.Implementation, r);                                   //homie/DimKitchen/$implementation	          =   xComfort
-                await SendMQTTMessageAsync($"{device.Name}/$interval", device.Stats_interval, r);                                         //homie/DimKitchen/$stats/interval	          =   60
-                await SendMQTTMessageAsync($"{device.Name}/$state", device.State, r);                                                     //homie/DimKitchen/$state			              =   ready
-
-
-                foreach (Homie.Node node in device.Node)
-                {
-                    //                                                                                                                                       NODE
-
-                    await SendMQTTMessageAsync($"{device.Name}/{node.PathName}", node.Value, r);                                          //homie/DimKitchen/lights                       =   42
-
-                    await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/$name", node.Name, r);                                     //homie/DimKitchen/lights/$name                 =   Lights
-                    await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/$type", node.Type, r);                                     //homie/DimKitchen/lights/$type                 =   Dimmer
-                    await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/$properties", node.Properties, r);                         //homie/DimKitchen/lights/$properties           =   intensity
-
-                    foreach (Homie.Property property in node.PropertyList)
-                    {
-                        //                                                                                                                                          PROPERTY
-                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$name", property.Name, r);         //homie/DimKitchen/lights/intensity/$name       =   "Light Intensity"
-                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$settable", property.Settable, r); //homie/DimKitchen/lights/intensity/$settable   =   "true"
-                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$unit", property.Unit, r);         //homie/DimKitchen/lights/intensity/$unit       =   "%"
-                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$datatype", property.DataType, r); //homie/DimKitchen/lights/intensity/$datatype   =   "integer"
-                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$format", property.Format, r);     //homie/DimKitchen/lights/intensity/$format     =   "0:100"
-
-                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}", property.DataValue, r);
-                    }
-                }
-            } catch (Exception exception)
+                await SendMQTTMessageAsync($"{device.devtopic}/config", device.GetConfig(), false);
+                await SendMQTTMessageAsync(device.State_topic, device.currentState, device.Retain);
+            }
+            catch (Exception exception)
             {
                 Console.WriteLine(exception.Message);
             }
+
         }
-    }
+
+        public static async Task PublishHomieDeviceAsync(Homie.Device device)
+            {
+                try
+                {
+
+                    bool r = true;
+                    //                                                                                                                                DEVICE
+
+                    await SendMQTTMessageAsync($"{device.Name}/$homie", device.Homie, r);                                                     //homie/DimKitchen/$homie			              =   3.0.1	
+                    await SendMQTTMessageAsync($"{device.Name}/$name", device.Name, r);                                                       //homie/DimKitchen/$name			              =   Kitchen lights	
+                    await SendMQTTMessageAsync($"{device.Name}/$localip", device.Localip, r);                                                 //homie/DimKitchen/$localip			          =   0.0.0.0	
+                    await SendMQTTMessageAsync($"{device.Name}/$mac", device.Mac, r);                                                         //homie/DimKitchen/$mac				          =   00:00:00:00:00:00
+                    await SendMQTTMessageAsync($"{device.Name}/$fw/name", device.Fw_name, r);                                                 //homie/DimKitchen/$fw/name			          =   BachelorPad
+                    await SendMQTTMessageAsync($"{device.Name}/$fw/version", device.Fw_version, r);                                           //homie/DimKitchen/$fw/version		          =   1.0.0	
+                    await SendMQTTMessageAsync($"{device.Name}/$nodes", device.Nodes, r);                                                     //homie/DimKitchen/$nodes			              =   lights,signal	
+                    await SendMQTTMessageAsync($"{device.Name}/$implementation", device.Implementation, r);                                   //homie/DimKitchen/$implementation	          =   xComfort
+                    await SendMQTTMessageAsync($"{device.Name}/$interval", device.Stats_interval, r);                                         //homie/DimKitchen/$stats/interval	          =   60
+                    await SendMQTTMessageAsync($"{device.Name}/$state", device.State, r);                                                     //homie/DimKitchen/$state			              =   ready
+
+
+                    foreach (Homie.Node node in device.Node)
+                    {
+                        //                                                                                                                                       NODE
+
+                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}", node.Value, r);                                          //homie/DimKitchen/lights                       =   42
+
+                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/$name", node.Name, r);                                     //homie/DimKitchen/lights/$name                 =   Lights
+                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/$type", node.Type, r);                                     //homie/DimKitchen/lights/$type                 =   Dimmer
+                        await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/$properties", node.Properties, r);                         //homie/DimKitchen/lights/$properties           =   intensity
+
+                        foreach (Homie.Property property in node.PropertyList)
+                        {
+                            //                                                                                                                                          PROPERTY
+                            await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$name", property.Name, r);         //homie/DimKitchen/lights/intensity/$name       =   "Light Intensity"
+                            await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$settable", property.Settable, r); //homie/DimKitchen/lights/intensity/$settable   =   "true"
+                            await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$unit", property.Unit, r);         //homie/DimKitchen/lights/intensity/$unit       =   "%"
+                            await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$datatype", property.DataType, r); //homie/DimKitchen/lights/intensity/$datatype   =   "integer"
+                            await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}/$format", property.Format, r);     //homie/DimKitchen/lights/intensity/$format     =   "0:100"
+
+                            await SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{property.PathName}", property.DataValue, r);
+                        }
+                    }
+                } catch (Exception exception)
+                {
+                    Console.WriteLine(exception.Message);
+                }
+            }
+            }
 }

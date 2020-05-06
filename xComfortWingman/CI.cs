@@ -1289,7 +1289,8 @@ namespace xComfortWingman
                 //    //await MQTT.PublishArrayElement(arrayElement);
                 //    await Homie.PublishDatapointAsNode(datapoint);
                 //}
-                await MQTT.PublishDeviceAsync(device);
+                await MQTT.PublishHomieDeviceAsync(device);
+                await MQTT.PublishHomeAssistantDeviceAsync(HomeAssistant.deviceList.Find(d => d.DP == dataPointID));
                 //await Homie.PublishDatapointAsNode(datapoint);
 
                 //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
@@ -1310,7 +1311,7 @@ namespace xComfortWingman
                 //This is where we tell BachelorPad about the change that has been made.
                 DoLog("Datapoint " + dataPointID + " (" + datapoint.Name + ") just confirmed value " + dataValue);
                 await Homie.UpdateDeviceData(device, packet);
-                await MQTT.PublishDeviceAsync(device);
+                await MQTT.PublishHomieDeviceAsync(device);
                 //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
                 //Homie.UpdateArrayElement(arrayElement, dataValue);
                 //await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue, true);

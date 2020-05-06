@@ -4,12 +4,12 @@ using System.Text;
 
 namespace xComfortWingman
 {
-    class HomeAssistant
+    public class HomeAssistant
     {
         readonly static string BaseTopic = "myhome/homeassistant";
-        static List<Device> deviceList = new List<Device>();
+        public static List<Device> deviceList = new List<Device>();
 
-        static Device SetupNewDevice(Datapoint datapoint, string name = "")
+        public static Device SetupNewDevice(Datapoint datapoint, string name = "")
         {
             Device newDevice;
             switch (datapoint.Type)
@@ -45,9 +45,11 @@ namespace xComfortWingman
             return newDevice;
         }
 
-        partial class Device
+        public partial class Device
         {
             public int DP { get; set; }
+            public string devtopic { get; set; }
+            public string currentState { get; set; }
 
             public string Name { get; set; }
             public string Manufacturer { get; set; } = "xComfort";
@@ -90,7 +92,7 @@ namespace xComfortWingman
 
             public Switch(Datapoint datapoint)
             {
-                string devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
+                this.devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
                 //Return based solely on the datapoint provided
                 this.Name = datapoint.Name;
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
@@ -126,7 +128,7 @@ namespace xComfortWingman
 
             public BinarySensor(Datapoint datapoint)
             {
-                string devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
+                this.devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
                 //Return based solely on the datapoint provided
                 this.Name = datapoint.Name;
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
@@ -149,7 +151,7 @@ namespace xComfortWingman
 
             public Sensor(Datapoint datapoint)
             {
-                string devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
+                this.devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
                 //Return based solely on the datapoint provided
                 this.Name = datapoint.Name;
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
@@ -198,7 +200,7 @@ namespace xComfortWingman
 
             public Light(Datapoint datapoint)
             {
-                string devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
+                this.devtopic = $"{BaseTopic}/{devtype}/{datapoint.Name}";
                 //Return based solely on the datapoint provided
                 this.Name = datapoint.Name;
                 this.Model = GetModelNameForDeviceType(datapoint.Type);

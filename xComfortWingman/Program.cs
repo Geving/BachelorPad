@@ -63,7 +63,7 @@ namespace xComfortWingman
                     CreateDevicesOutOfDatapoints();
                     MQTT.RunMQTTClientAsync().Wait();
 
-                    MQTT.PublishDeviceAsync(Homie.CreateDeviceFromDatapoint(CI.datapoints[4])).Wait();
+                    MQTT.PublishHomieDeviceAsync(Homie.CreateDeviceFromDatapoint(CI.datapoints[4])).Wait();
                     Console.WriteLine($"Publications: {MQTT.PublicationCounter}");
                     CI.FakeData(new byte[] { 0x0D, 0xC1, 0x05, 0x70, 0x00, 0x62, 0x00, 0x00, 0x00, 0x00, 0x32, 0x10, 0x0B }).Wait();
                     //CI.FakeData(new byte[] { 0x0D, 0xC1, 0x31, 0x62, 0x17, 0x00, 0x00, 0xC9, 0x00, 0x00, 0x44, 0x24, 0x01 }).Wait();
@@ -225,6 +225,7 @@ namespace xComfortWingman
             foreach (Datapoint datapoint in CI.datapoints)
             {
                 Homie.devices.Add(Homie.CreateDeviceFromDatapoint(datapoint));
+                HomeAssistant.SetupNewDevice(datapoint);
             }
             DoLog("OK", 3, false, 10);
             DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
