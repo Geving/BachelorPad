@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace xComfortWingman
@@ -22,10 +23,14 @@ namespace xComfortWingman
                 NewValue = NewValue.ToLower();
                 switch (this.DeviceType.ID){
                     case 6: //Switching Actuator
-                        if (NewValue=="on" || NewValue="1" || (NewValue.All(Char.IsDigit) && Convert.ToDouble(NewValue)>0))
+                        if (NewValue == "on" || NewValue == "1" || (NewValue.All(Char.IsDigit) && Convert.ToDouble(NewValue) > 0))
                         {
 
-                        } else if (NewValue=="off" || NewValue="0")
+                        }
+                        else if (NewValue == "off" || NewValue == "0")
+                        { 
+
+                        }
                         break;
                     case 7: //Dimming Actuator
                         break;
@@ -66,7 +71,7 @@ namespace xComfortWingman
                         break;
                    
                     default: // Device is unknown, not implemented or not accepting input.
-                        
+                        break;    
                 }
             }
 
@@ -215,7 +220,7 @@ namespace xComfortWingman
                     case 70: //Router New Generation
                         break;
                     default:
-
+                        break;
                 }
             }
         }

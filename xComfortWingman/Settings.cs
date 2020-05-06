@@ -44,14 +44,14 @@ namespace xComfortWingman
 
         // MQTT related settings
         public MQTT_CONNECTION_METHOD MQTT_CONNECTION_METHOD { get; set; } = MQTT_CONNECTION_METHOD.TCP;
-        public string MQTT_SERVER_WEBSOCKET { get; set; } = "destiny.geving.it:1883/mqtt";
-        public string MQTT_SERVER_TCP { get; set; } = "destiny.geving.it";
-        public string MQTT_CLIENT_ID { get; set; } = "bachelorpad_%rnd%";
+        public string MQTT_SERVER_WEBSOCKET { get; set; } = "mqtt.geving.it:1883/mqtt";
+        public string MQTT_SERVER_TCP { get; set; } = "mqtt.geving.it";
+        public string MQTT_CLIENT_ID { get; set; } = "wingman_%rnd%";
         public string MQTT_CRED_USERNAME { get; set; } = "";
         public string MQTT_CRED_PASSWORD { get; set; } = "";
         public bool MQTT_USE_TLS { get; set; } = false;
         public bool MQTT_CLEAN_SESSION { get; set; } = false;
-        public string MQTT_BASETOPIC { get; set; } = "homie/";
+        public string MQTT_BASETOPIC { get; set; } = "myhome/";
         public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/#/be/subscribed/to" };
 
         // MQTT HOMIE related

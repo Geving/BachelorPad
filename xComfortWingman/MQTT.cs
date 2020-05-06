@@ -151,7 +151,7 @@ namespace xComfortWingman
                 }
             }
 
-            if (usebasic)
+            if (UseBasic)
             {
 
             }
