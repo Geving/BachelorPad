@@ -143,7 +143,7 @@ namespace xComfortWingman
             {
                 using (StreamWriter w = new StreamWriter("settings.json"))
                 {
-                    string json = JsonConvert.SerializeObject(settings);
+                    string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
                     w.WriteLine(json);
                 }
                 return true;

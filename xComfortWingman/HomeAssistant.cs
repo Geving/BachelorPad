@@ -96,7 +96,7 @@ namespace xComfortWingman
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.Serial.ToString();
+                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
                 this.Command_topic = $"{devtopic}/set";
 
             }
@@ -132,7 +132,7 @@ namespace xComfortWingman
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.Serial.ToString();
+                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
                 this.off_delay = 0;
                 this.Device_class = GetSensorTypeForDeviceType(datapoint.Type);
                 this.Expire_after = GetExpiryForDeviceType(datapoint.Type);
@@ -155,7 +155,7 @@ namespace xComfortWingman
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.Serial.ToString();
+                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
                 this.Device_class = GetSensorTypeForDeviceType(datapoint.Type);
                 this.Expire_after = GetExpiryForDeviceType(datapoint.Type);
                 this.Unit_of_measurement = GetSensorDataUnitForDeviceType(datapoint.Type);
@@ -204,7 +204,7 @@ namespace xComfortWingman
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.Serial.ToString();
+                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
                 this.brightness_scale = 100;
                 this.brightness_command_topic = $"{devtopic}/set";
                 this.brightness_state_topic = $"{devtopic}/state";
