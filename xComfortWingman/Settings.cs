@@ -51,7 +51,7 @@ namespace xComfortWingman
         public string MQTT_CRED_PASSWORD { get; set; } = "";
         public bool MQTT_USE_TLS { get; set; } = false;
         public bool MQTT_CLEAN_SESSION { get; set; } = false;
-        public string MQTT_BASETOPIC { get; set; } = "homie/";
+        public string MQTT_BASETOPIC { get; set; } = "homie";
         public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/#/be/subscribed/to" };
 
         // MQTT HOMIE related
@@ -143,7 +143,7 @@ namespace xComfortWingman
             {
                 using (StreamWriter w = new StreamWriter("settings.json"))
                 {
-                    string json = JsonConvert.SerializeObject(settings);
+                    string json = JsonConvert.SerializeObject(settings,Formatting.Indented);
                     w.WriteLine(json);
                 }
                 return true;

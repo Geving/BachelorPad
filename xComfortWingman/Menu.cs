@@ -32,6 +32,7 @@ namespace xComfortWingman
             Console.WriteLine($"\t1. Start (default)");
             Console.WriteLine($"\t2. Settings");
             Console.WriteLine($"\t3. About");
+            Console.WriteLine($"\t9. Export Homie devices to OpenHAB JSON format");
             Console.WriteLine($"\t0. Exit");
             Console.WriteLine($"");
             string selection = Console.ReadKey().KeyChar.ToString();
@@ -52,8 +53,18 @@ namespace xComfortWingman
                        
                         break;
                     }
+                case "9":
+                    {
+                        Console.Clear();
+                        Program.ExportDevicesToOpenHABformat();
+                        Console.WriteLine("Press any key to return to the main menu...");
+                        Console.ReadKey();
+                        break;
+                    }
                 case "0":
                     {
+                        Program.DoExit = true;
+                        Console.WriteLine("Exit!");
                         return; // Exit!
                     }
                 default:

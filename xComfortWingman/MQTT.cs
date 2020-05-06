@@ -151,10 +151,10 @@ namespace xComfortWingman
                 }
             }
 
-            if (usebasic)
-            {
+            //if (usebasic)
+            //{
 
-            }
+            //}
             DoLog("OK", 3, false, 10);
             DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
             stopwatch.Reset();

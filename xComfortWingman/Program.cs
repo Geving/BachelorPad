@@ -11,10 +11,12 @@ namespace xComfortWingman
         public static readonly DateTime ApplicationStart = DateTime.Now;
         public static bool BootWithoutError = true;
         private static bool IllegalArguments = false;
+        private static bool DoExport = false;
+        public static bool DoExit = false;
         public static bool StayAlive = true;
         static void Main(string[] args)
         {
-            Basic basic = new Basic();
+            //Basic basic = new Basic();
             //Basic.Device newDevice = new Basic.Device("My dimmer", ,
             //Basic.Device myDev = new DevType.DimmingActuator();
             //Basic.Device device = new Basic.Device.Ds();
@@ -32,6 +34,11 @@ namespace xComfortWingman
                     case "--h":
                     case "/h":
                     case "/?":
+                    case "-e":
+                        {
+                            ExportDevicesToOpenHABformat();
+                            break;
+                        }
                     case "-m": { mm = true; break; };
                     case "-h": { im=true; IllegalArguments = true; break; };
                     case "-def": { Settings.DefaultSettings(); break; };
@@ -52,7 +59,7 @@ namespace xComfortWingman
             if (IllegalArguments) { return; }
 
             Menu.MainMenu();
-
+            if (DoExit) { return; }
 
             DoLog("Starting BachelorPad...",4);
             if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
@@ -179,6 +186,7 @@ namespace xComfortWingman
             }
         }
 
+
         public static String GetDatapointFile()
         {
             try
@@ -237,6 +245,41 @@ namespace xComfortWingman
             stopwatch.Reset();
             DoLog($"Total number of devices: ", false);
             DoLog($"{ Homie.devices.Count}",3,true,10);
+        }
+
+        public static void ExportDevicesToOpenHABformat()
+        {
+
+            int itemCount = 0;
+            string ItemChannelLinkJSON = "{";
+            string CoreItemJSON = "{";
+            ImportDatapointsFromFile(Settings.GENERAL_DATAPOINTS_FILENAME);
+            CreateDevicesOutOfDatapoints();
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            DoLog("Exporting devices to OpenHAB format...", false);
+            foreach (Homie.Device device in Homie.devices)
+            {
+                ItemChannelLinkJSON += Export.GetItemChannelLinkJSONfromDevice(device) + ",";
+                CoreItemJSON += Export.GetCoreThingJSONfromDevice(device) + ",";
+                itemCount++;
+            }
+            ItemChannelLinkJSON = ItemChannelLinkJSON.Remove(ItemChannelLinkJSON.Length - 1) + "\n}";
+            ItemChannelLinkJSON = ItemChannelLinkJSON.Remove(ItemChannelLinkJSON.Length - 1) + "\n}";
+
+            using (StreamWriter w = new StreamWriter("ItemChannelLink.json"))
+            {
+                w.WriteLine(ItemChannelLinkJSON);
+            }
+            using (StreamWriter w = new StreamWriter("CoreItem.json"))
+            {
+                w.WriteLine(CoreItemJSON);
+            }
+            DoLog("OK", 3, false, 10);
+            DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+            stopwatch.Reset();
+            DoLog($"Total number of devices exported: ", false);
+            DoLog($"{ itemCount }", 3, true, 10);
         }
         #endregion
 

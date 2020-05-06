@@ -33,9 +33,9 @@ namespace xComfortWingman
                             $"/t/t\"Battery\":{packet.MGW_RX_BATTERY.ToString()}\",";
 
             //$"/t/t\"{}\":\"{}\",\n";
-                    
+
             //    default: { node.Value = CI.GetDataFromPacket(packet.MGW_RX_DATA, packet.MGW_RX_DATA_TYPE, ""); break; }
-            
+
 
 
 
@@ -87,7 +87,9 @@ namespace xComfortWingman
                     break;
 
                 default: // Device is unknown, not implemented or not accepting input.
+                    break;
             }
+            return output;
         }
     }
 }
