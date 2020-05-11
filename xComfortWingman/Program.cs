@@ -31,6 +31,9 @@ namespace xComfortWingman
                     case "-def": { Settings.DefaultSettings(); break; };
                     case "-nope": { ; break; };
                     case "-debug": { Settings.GENERAL_DEBUGMODE = true; break; };
+                    case "-nodebug": { Settings.GENERAL_DEBUGMODE = false; break; };
+                    case "-s": { Menu.ProcessGroup("all", true); break; }
+                    //case "-clear": { if(HomeAssistant.ClearAutoConfig()==true) return; break; }
                     default:
                         {
                             Console.WriteLine("Unknown argument: " + arg);
@@ -45,10 +48,10 @@ namespace xComfortWingman
             }
             if (IllegalArguments) { return; }
 
-            Menu.MainMenu();
+            //Menu.MainMenu();
 
 
-            DoLog("Starting BachelorPad...",4);
+            DoLog("Starting Wingman for xComfort...",4);
             if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
 
             //if(Settings.DEBUGMODE) { Console.WriteLine(Settings.GetSettingsAsJSON()); Console.ReadLine(); }
@@ -83,6 +86,7 @@ namespace xComfortWingman
 
             BootWithoutError = ImportDatapointsFromFile(Settings.GENERAL_DATAPOINTS_FILENAME);
             if (BootWithoutError) { CreateDevicesOutOfDatapoints(); }
+            //if (BootWithoutError) { PublishAutoConfigForAllDevices(); }
             if (BootWithoutError) { MQTT.RunMQTTClientAsync().Wait(); }
             if (BootWithoutError) { CI.ConnectToCI().Wait(); }
             if (BootWithoutError)

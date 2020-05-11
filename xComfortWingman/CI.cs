@@ -16,6 +16,7 @@ using static xComfortWingman.Protocol.PT_RX.MGW_RX_DATA_TYPE;
 using static xComfortWingman.MyLogger;
 using System.IO;
 using System.Threading.Tasks;
+using System.Reflection.Metadata;
 
 namespace xComfortWingman
 {
@@ -31,6 +32,10 @@ namespace xComfortWingman
 
         public static List<Datapoint> datapoints=new List<Datapoint>();
         //public static List<DeviceType> devicetypes = dtl.ListDeviceTypes();
+
+        public static bool UseHomie = Program.Settings.HOMIE_USE_HOMIE;
+        public static bool UseBasic = Program.Settings.BASIC_USE_BASIC;
+        public static bool UseHomeAssistant = Program.Settings.HOMEASSISTANT_USE_HOMEASSISTANT;
 
         public static byte sequenceCounter = 0x00;
         public static byte[][] messageHistory = new byte[15][];
@@ -614,7 +619,6 @@ namespace xComfortWingman
                                         case 0x10://MGW_STD_OKMRF_ACK_DIRECT        RF ≥90: ACK from controlled device
                                             {
                                                 DoLog("MRF OK! (Direct)");
-                                                //broadcastAck()
                                                 break;
                                             }
 
@@ -921,7 +925,7 @@ namespace xComfortWingman
                 // To be certain that we know what the data means, we might need to know several things.
                 //      For room controllers, we need to know what mode it's in.
                 //      For dimmers, we only need the percentage from Info Short.
-
+                DoLog("DeviceType=" + devicetype.Name, 0);
                 DoLog("DataType=" + Protocol.PT_RX.MGW_RX_DATA_TYPE.GetNameFromByte(devicetype.DataTypes[0]),2);
 
 
@@ -1037,6 +1041,10 @@ namespace xComfortWingman
                         case 5:     // Room controller
                         case 51:    // Room Controller w/ Switch/Humidity CRCA-00/05
                             {
+                                if (UseHomeAssistant)
+                                {
+                                    HomeAssistant.UpdateDeviceData(rxPacket).Wait();
+                                }
                                 switch (datapoint.Channel)
                                 {
                                     case 0: //  Channel 0 is temperature. The same on both device models.
@@ -1049,13 +1057,16 @@ namespace xComfortWingman
                                                         double[] data = new double[2];
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
                                                         //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
-                                                        // Homie specific workaround because Room Controllers sends two pieces of data at once.
-                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
-                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
-                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
-                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        if (UseHomie)
+                                                        {
+                                                            // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                                                            Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                            Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                            Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                            Homie.UpdateSingleProperty($"homie/{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                            property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                            Homie.UpdateSingleProperty($"homie/{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        }
                                                         break;
                                                     }
                                                 default:
@@ -1065,14 +1076,16 @@ namespace xComfortWingman
                                                         data = GetDataFromPacket(rxPacket.MGW_RX_DATA, rxPacket.MGW_RX_DATA_TYPE, doubleArrayData);
                                                         //BroadcastChange(datapoint.DP, $"temperature:{data[1]};wheelposition:{data[0]}", rxPacket); // Not used for Homie
 
-                                                        // Homie specific workaround because Room Controllers sends two pieces of data at once.
-                                                        Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
-                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
-                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
-                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
-
+                                                        if (UseHomie)
+                                                        {
+                                                            // Homie specific workaround because Room Controllers sends two pieces of data at once.
+                                                            Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
+                                                            Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                            Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                            Homie.UpdateSingleProperty($"homie/{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                            property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                            Homie.UpdateSingleProperty($"homie/{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        }
 
                                                         break;
                                                     }
@@ -1269,31 +1282,45 @@ namespace xComfortWingman
             {
             try
             {
+                
                 //This is where we tell BachelorPad about the change that has been made.
                 //(Could also consider making this compatible with OpenHAB2 and other such systems, so that more could benefit from it)
                 Datapoint datapoint = datapoints.Find(x => x.DP == dataPointID);
-                Homie.Device device = Homie.devices.Find(x => x.Datapoint.DP == dataPointID);
                 DoLog("Datapoint " + dataPointID + " (" + datapoint.Name + ") just reported value " + dataValue);
-                await Homie.UpdateDeviceData(device, packet);
-                //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
-                //Homie.UpdateArrayElement(arrayElement, dataValue);
-                //if(datapoint.Type==5 || datapoint.Type == 51)
-                //{
-                //    //Special case for the Room Controller, which sends TWO pieces of data in one transmission...
-                //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/$name", arrayElement.Name, true);
-                //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/" + dataValue.Split(";")[0].Split(":")[0], dataValue.Split(";")[0].Split(":")[1], true);
-                //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/" + dataValue.Split(";")[1].Split(":")[0], dataValue.Split(";")[1].Split(":")[1], true);
-                //}
-                //else
-                //{
-                //    //await MQTT.PublishArrayElement(arrayElement);
-                //    await Homie.PublishDatapointAsNode(datapoint);
-                //}
-                await MQTT.PublishHomieDeviceAsync(device);
-                await MQTT.PublishHomeAssistantDeviceAsync(HomeAssistant.deviceList.Find(d => d.DP == dataPointID));
-                //await Homie.PublishDatapointAsNode(datapoint);
 
-                //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+                if (UseHomeAssistant)
+                {
+                    await HomeAssistant.UpdateDeviceData(packet);
+                }
+
+                if (UseHomie)
+                {
+
+
+                    //await MQTT.PublishHomeAssistantDeviceAsync(HomeAssistant.deviceList.Find(d => d.DP == dataPointID));
+
+                    Homie.Device device = Homie.devices.Find(x => x.Datapoint.DP == dataPointID);
+                    await Homie.UpdateDeviceData(device, packet);
+                    //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
+                    //Homie.UpdateArrayElement(arrayElement, dataValue);
+                    //if(datapoint.Type==5 || datapoint.Type == 51)
+                    //{
+                    //    //Special case for the Room Controller, which sends TWO pieces of data in one transmission...
+                    //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/$name", arrayElement.Name, true);
+                    //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/" + dataValue.Split(";")[0].Split(":")[0], dataValue.Split(";")[0].Split(":")[1], true);
+                    //    await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath + "/" + dataValue.Split(";")[1].Split(":")[0], dataValue.Split(";")[1].Split(":")[1], true);
+                    //}
+                    //else
+                    //{
+                    //    //await MQTT.PublishArrayElement(arrayElement);
+                    //    await Homie.PublishDatapointAsNode(datapoint);
+                    //}
+                    await MQTT.PublishHomieDeviceAsync(device);
+
+                    //await Homie.PublishDatapointAsNode(datapoint);
+
+                    //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
+                }
             }
             catch (Exception exception)
             {
@@ -1306,12 +1333,23 @@ namespace xComfortWingman
             try
             {
                 Datapoint datapoint = datapoints.Find(x => x.DP == dataPointID);
-                Homie.Device device = Homie.devices.Find(x => x.Datapoint.DP == dataPointID);
-                
+                                
                 //This is where we tell BachelorPad about the change that has been made.
                 DoLog("Datapoint " + dataPointID + " (" + datapoint.Name + ") just confirmed value " + dataValue);
-                await Homie.UpdateDeviceData(device, packet);
-                await MQTT.PublishHomieDeviceAsync(device);
+
+                if (UseHomeAssistant)
+                {
+                    await HomeAssistant.UpdateDeviceData(packet);
+                }
+                if (UseHomie)
+                {
+                    Homie.Device device = Homie.devices.Find(x => x.Datapoint.DP == dataPointID);
+                    await Homie.UpdateDeviceData(device, packet);
+                    await MQTT.PublishHomieDeviceAsync(device);
+                }
+                
+                
+                //await MQTT.PublishHomeAssistantDeviceAsync(HomeAssistant.deviceList.Find(d => d.DP == dataPointID));
                 //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
                 //Homie.UpdateArrayElement(arrayElement, dataValue);
                 //await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue, true);

@@ -193,7 +193,7 @@ namespace xComfortWingman
             ProcessSettingsMenu(ViewOnly);
         }
 
-        private static void ProcessGroup(string FilterText, bool ViewOnly)
+        public static void ProcessGroup(string FilterText, bool ViewOnly)
         {
             foreach (System.Reflection.PropertyInfo info in Program.Settings.GetType().GetProperties())
             {

@@ -21,16 +21,16 @@ namespace xComfortWingman
             foreach (Device device in devices)
             {
                 //int index = 0;
-                await MQTT.SendMQTTMessageAsync($"{device.Name}/$stats/uptime", stats[0], true);
-                //await MQTT.SendMQTTMessageAsync($"{device.Name}/$stats/signal", stats[1], true);
-                //await MQTT.SendMQTTMessageAsync($"{device.Name}/$stats/cputemp", stats[2], true);
-                //await MQTT.SendMQTTMessageAsync($"{device.Name}/$stats/cpuload", stats[3], true);
-                //await MQTT.SendMQTTMessageAsync($"{device.Name}/$stats/battery", stats[4], true);
-                //await MQTT.SendMQTTMessageAsync($"{device.Name}/$stats/freeheap", stats[5], true);
-                //await MQTT.SendMQTTMessageAsync($"{device.Name}/$stats/supply", stats[6], true);
+                await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/$stats/uptime", stats[0], true);
+                //await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/$stats/signal", stats[1], true);
+                //await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/$stats/cputemp", stats[2], true);
+                //await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/$stats/cpuload", stats[3], true);
+                //await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/$stats/battery", stats[4], true);
+                //await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/$stats/freeheap", stats[5], true);
+                //await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/$stats/supply", stats[6], true);
             }
             // These must be sent with the interval given in homie/unitname/$interval
-            
+
         }
 
         #region "Stats helpers"
@@ -244,7 +244,7 @@ namespace xComfortWingman
                     default: { node.Value = CI.GetDataFromPacket(packet.MGW_RX_DATA, packet.MGW_RX_DATA_TYPE, ""); break; }
                 }
                 MyLogger.DoLog($"Updating data for {device.Name}'s {node.Name}: {node.Value}...",4);
-                await MQTT.SendMQTTMessageAsync($"{device.Name}/{node.PathName}/{node.PropertyList[0].PathName}", node.Value, true);
+                await MQTT.SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/{node.PropertyList[0].PathName}", node.Value, true);
             }
         }
 
@@ -252,7 +252,7 @@ namespace xComfortWingman
         {
             MyLogger.DoLog($"Updating {topic} with new value: {newDataValue}",2);
             property.DataValue = newDataValue;
-            await MQTT.SendMQTTMessageAsync(topic, newDataValue, true);
+            await MQTT.SendMQTTMessageAsync("homie/" + topic, newDataValue, true);
         }
 
         public static Node GetNodeFromNodeName(string nodeName)
