@@ -72,6 +72,8 @@ namespace xComfortWingman
 
         public bool HOMEASSISTANT_USE_HOMEASSISTANT { get; set; } = true;
 
+        public string HOMEASSISTANT_DISCOVERYTOPIC { get; set; } = "homeassistant";
+
         // Communication Interface related settings
         public CI_CONNECTION_MODE CI_CONNECTION_MODE { get; set; } = CI_CONNECTION_MODE.USB_MODE;
         public byte[][] CI_INTERFACE_INIT_COMMANDS { get; set; } = new byte[10][]; //Allow upto ten sets of commands to be executed at startup

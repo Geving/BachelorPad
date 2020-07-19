@@ -7,13 +7,16 @@ namespace xComfortWingman
 {
     class Program
     {
-        public static readonly Settings Settings = new Settings(true);
+        public static Settings Settings = new Settings(true);
         public static readonly DateTime ApplicationStart = DateTime.Now;
         public static bool BootWithoutError = true;
         private static bool IllegalArguments = false;
         public static bool StayAlive = true;
         static void Main(string[] args)
         {
+            //dotnet publish "C:\Users\harald.geving\Source\Repos\BachelorPad\" --configuration Release --framework netcoreapp3.1 --self-contained false --runtime linux-x86 --verbosity quiet
+            //clear; dotnet publish -r linux-arm -o \\192.168.0.3\c$\wwwpub\harald.geving.no\files
+
             // Handling CLI arguments
             foreach (string arg in args)
             {
@@ -32,6 +35,9 @@ namespace xComfortWingman
                     case "-nope": { ; break; };
                     case "-debug": { Settings.GENERAL_DEBUGMODE = true; break; };
                     case "-nodebug": { Settings.GENERAL_DEBUGMODE = false; break; };
+                    case "-ad0": { Settings.HOMEASSISTANT_DISCOVERYTOPIC = ""; break; };
+                    case "-ad1": { Settings.HOMEASSISTANT_DISCOVERYTOPIC = "myhome"; break; };
+                    case "-ad2": { Settings.HOMEASSISTANT_DISCOVERYTOPIC = "homeassistant"; break; };
                     case "-s": { Menu.ProcessGroup("all", true); break; }
                     //case "-clear": { if(HomeAssistant.ClearAutoConfig()==true) return; break; }
                     default:

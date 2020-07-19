@@ -9,6 +9,7 @@ namespace xComfortWingman
     public class HomeAssistant
     {
         public readonly static string BaseTopic = "wingman";
+        
         public static List<Device> deviceList = new List<Device>();
 
         public static Device SetupNewDevice(Datapoint datapoint, string name = "")
@@ -573,7 +574,7 @@ namespace xComfortWingman
                 //                $"}}," +
                 //                $"\"availability_topic\": \"{this.Availability_topic}\"" +
                 //    $"}}");
-                this.AutoConfigs.Add(this.Config_topic + "_Brightness",
+                this.AutoConfigs.Add(this.Config_topic, // + "_Brightness",
                     $"{{" +
                     $"\"name\": \"{this.Name}\", " +
                     $"\"unique_id\": \"{this.Identifiers}\", " +
@@ -813,7 +814,7 @@ namespace xComfortWingman
                 case 16: //Binary Input, Battery
                     return "Binary Input, Battery";
                 //case 7: //Binary Input, Battery
-                    return "Binary Input, Battery";
+                    //return "Binary Input, Battery";
                 case 18: //Remote Control 12 Channel (old design)
                     return "Remote Control 12 Channel (old design)";
                 case 19: //Home-Manager
@@ -1145,9 +1146,11 @@ namespace xComfortWingman
             foreach(Device device in deviceList)
             {
                 MyLogger.DoLog("Removing Auto Config data for " + device.Name + "...", false);
+                //if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{device.Config_topic}/config", true); }
                 MQTT.SendMQTTMessageAsync(device.Config_topic + "/config", "", false).Wait(new TimeSpan(0,0,0,0,50));
                 foreach (KeyValuePair<string, string> conf in device.AutoConfigs)
                 {
+                    //if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{conf.Key}/config", true); }
                     MQTT.SendMQTTMessageAsync($"{conf.Key}/config", "", false).Wait(new TimeSpan(0, 0, 0, 0, 50));
                 }
                 MyLogger.DoLog("OK", 3, true, 10);
@@ -1156,12 +1159,14 @@ namespace xComfortWingman
         }
          public static bool SendAutoConfig()
         {
+            
             foreach(Device device in deviceList)
             {
                 MyLogger.DoLog("Sending Auto Config data for " + device.Name + "...", false);
                 foreach(KeyValuePair<string,string> conf in device.AutoConfigs)
                 {
-                    MQTT.SendMQTTMessageAsync($"{conf.Key}/config", conf.Value, false).Wait(new TimeSpan(0, 0, 0, 0, 50));
+                    if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{conf.Key}/config", true); }
+                    MQTT.SendMQTTMessageAsync($"/{conf.Key}/config", conf.Value, false).Wait(new TimeSpan(0, 0, 0, 0, 50));
                 }
                 MyLogger.DoLog("OK", 3, true, 10);
             }

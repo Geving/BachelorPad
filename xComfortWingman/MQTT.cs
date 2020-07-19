@@ -194,6 +194,8 @@ namespace xComfortWingman
                     $"{BasePublishingTopic}/RAW/in/",                       // Allows the user to send raw bytes to the CI
                     $"{BasePublishingTopic}/raw/in/",                       // Same as RAW, but the bytes are now human readable strings "06 C1 04 ..."
                     $"{BasePublishingTopic}/cmd/",                          // A way to receive simple commands like "exit" 
+                    $"{BasePublishingTopic}/ad/",                          // A way to receive simple commands like "exit" 
+                    $"{BasePublishingTopic}/debug/",                          // A way to receive simple commands like "exit" 
                     $"{Program.Settings.MQTT_BASETOPIC}/ClearAutoConfig"    // Nasty...
                     //$"{BasePublishingTopic}/shell/#"                      // Runs shell commands on the system. Potensial SECURITY HOLE
                 };
@@ -393,6 +395,18 @@ namespace xComfortWingman
                                     }
                                     break;
                                 }
+                            case "ad":
+                                {
+                                    DoLog("Setting new discoverytopic: " + payload, 3);
+                                    Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC = payload;
+                                    break;
+                                }
+                            case "debug":
+                                {
+                                    if (payload == "true") Program.Settings.GENERAL_DEBUGMODE = true;
+                                    if (payload == "false") Program.Settings.GENERAL_DEBUGMODE = false;
+                                    break;
+                                }
                             case "shell":
                                 {
                                     // This is just a tad too much of a security risk to implement at this time.
@@ -507,13 +521,17 @@ namespace xComfortWingman
             {
                 try
                 {
-                    string totaltopic = ($"{Program.Settings.MQTT_BASETOPIC}/{topic}").Replace("//", "/");
-                    //if (UseHomeAssistant && topic.EndsWith("/config"))
-                    //{
-                    //    totaltopic = ($"homeassistant/{topic}").Replace("//", "/");
-                    //    retainOnServer = true;
-                    //}
-
+                    string totaltopic = ($"{Program.Settings.MQTT_BASETOPIC}/{topic}").Replace("//", "/").Replace("//", "/");
+                    if (UseHomeAssistant && topic.EndsWith("/config"))
+                    {
+                        totaltopic = ($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{topic}").Replace("//", "/");
+                        //retainOnServer = true;
+                    }
+                    if (Program.Settings.GENERAL_DEBUGMODE)
+                    {
+                        MyLogger.DoLog("PUB: " + totaltopic);
+                        MyLogger.DoLog("PL: " + payload + "\n");
+                    }
                     //Console.WriteLine(totaltopic + "\t\t--->\t\t" + payload);
                     var message = new MqttApplicationMessageBuilder()
                        .WithTopic(totaltopic)
