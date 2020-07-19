@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "xComfortWingman": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}
