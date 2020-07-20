@@ -6,7 +6,7 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/core/sdk:3.1-buster-arm32v7 AS build
 WORKDIR /src
 COPY ["xComfortWingman/xComfortWingman.csproj", "xComfortWingman/"]
-RUN dotnet restore "xComfortWingman/xComfortWingman.csproj"
+#RUN dotnet restore "xComfortWingman/xComfortWingman.csproj"
 COPY . .
 WORKDIR "/src/xComfortWingman"
 RUN dotnet build "xComfortWingman.csproj" -c Release -o /app/build -r linux-arm
