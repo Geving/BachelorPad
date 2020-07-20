@@ -9,10 +9,10 @@ COPY ["xComfortWingman/xComfortWingman.csproj", "xComfortWingman/"]
 #RUN dotnet restore "xComfortWingman/xComfortWingman.csproj"
 COPY . .
 WORKDIR "/src/xComfortWingman"
-RUN dotnet build "xComfortWingman.csproj" -c Release -o /app/build -r linux-arm
+RUN dotnet build "xComfortWingman.csproj" -c Release -o /app/build #-r linux-arm
 
 FROM build AS publish
-RUN dotnet publish "xComfortWingman.csproj" -c Release -o /app/publish -r linux-arm
+RUN dotnet publish "xComfortWingman.csproj" -c Release -o /app/publish #-r linux-arm
 
 FROM base AS final
 WORKDIR /app
