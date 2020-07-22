@@ -14,7 +14,7 @@ namespace xComfortWingman
         public static bool StayAlive = true;
         static void Main(string[] args)
         {
-            //dotnet publish "C:\Users\harald.geving\Source\Repos\BachelorPad\" --configuration Release --framework netcoreapp3.1 --self-contained false --runtime linux-x86 --verbosity quiet
+            //dotnet publish "C:\Users\harald.geving\Source\Repos\BachelorPad\" --configuration Release --framework netcoreapp3.1 --self-contained false --runtime linux-arm --verbosity quiet
             //clear; dotnet publish -r linux-arm -o \\192.168.0.3\c$\wwwpub\harald.geving.no\files
 
             // Handling CLI arguments
