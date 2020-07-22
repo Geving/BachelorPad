@@ -56,9 +56,9 @@ namespace xComfortWingman
             if (IllegalArguments) { return; }
 
             //Menu.MainMenu();
+            Console.BackgroundColor = ConsoleColor.Black;
 
-
-            DoLog("Starting Wingman for xComfort...",4);
+            DoLog("Starting xComfort2MQTT bridge...",4);
             if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
 
             //if(Settings.DEBUGMODE) { Console.WriteLine(Settings.GetSettingsAsJSON()); Console.ReadLine(); }
