@@ -190,6 +190,7 @@ namespace xComfortWingman
                 if (!File.Exists(Program.Settings.GENERAL_DATAPOINTS_FILENAME))
                 {
                     DoLog("Datapoint file not found!");
+                    
                     return "File not found!";
                 }
                 string everything = "Empty file!";

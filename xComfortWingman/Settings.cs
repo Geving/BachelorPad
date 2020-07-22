@@ -38,7 +38,7 @@ namespace xComfortWingman
         public bool GENERAL_RAW_ENABLED { get; set; } = true;
         public int GENERAL_RMF_TIMEOUT { get; set; } = 5000;
         public bool GENERAL_DEBUGMODE { get; set; } = false;
-        public String GENERAL_DATAPOINTS_FILENAME { get; set; } = "Datenpunkte.txt";
+        public String GENERAL_DATAPOINTS_FILENAME { get; set; } = "/mydata/datenpunkte.txt";
         public String GENERAL_NAME { get; set; } = "xComfort";
         public bool GENERAL_FROM_FILE { get; set; } = false;
 
