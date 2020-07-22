@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using static xComfortWingman.MyLogger;
 
 namespace xComfortWingman
@@ -134,11 +135,17 @@ namespace xComfortWingman
 
                 if (!File.Exists(filePath))
                 {
-                    DoLog("FAILED", 3, false, 12);
-                    DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                    stopwatch.Reset();
-                    DoLog("Datapoint file not found!");
-                    return false;
+                    DoLog("Attempting download...", false);
+                    WebClient webClient = new WebClient();
+                    webClient.DownloadFile("http://harald.geving.no/files/datenpunkte.txt", filePath);
+                    if (!File.Exists(filePath)) 
+                    { 
+                        DoLog("FAILED", 3, false, 12);
+                        DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                        stopwatch.Reset();
+                        DoLog("Datapoint file not found!");
+                        return false;
+                    }
                 }
                 string aline;
                 FileStream fileStream = new FileStream(filePath, FileMode.Open);
