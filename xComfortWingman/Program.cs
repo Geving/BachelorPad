@@ -59,7 +59,15 @@ namespace xComfortWingman
             Console.BackgroundColor = ConsoleColor.Black;
 
             DoLog("Starting xComfort2MQTT bridge...",4);
-            if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
+            if (File.Exists("/mydata/settings.json"))
+            {
+                Settings.ReadSettingsFromFile();
+            } 
+            else
+            {
+                Settings.WriteSettingsToFile(Settings);
+            }
+            //if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
 
             //if(Settings.DEBUGMODE) { Console.WriteLine(Settings.GetSettingsAsJSON()); Console.ReadLine(); }
 

@@ -106,6 +106,7 @@ namespace xComfortWingman
                 try
                 {
                     DoLog("Connecting to MQTT server...", false);
+                    
                     Stopwatch stopwatch = new Stopwatch();
                     stopwatch.Start();
                     await mqttClient.ConnectAsync(clientOptions);
@@ -127,7 +128,9 @@ namespace xComfortWingman
                     }
                     else
                     {
-                        DoLog("FAIL", 3, true, 14);
+                        DoLog("FAIL", 3, false, 14);
+                        stopwatch.Stop();
+                        DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                         Program.BootWithoutError = false;
                     }
                 }

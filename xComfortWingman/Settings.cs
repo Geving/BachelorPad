@@ -145,7 +145,7 @@ namespace xComfortWingman
         {
             try
             {
-                using (StreamWriter w = new StreamWriter("settings.json"))
+                using (StreamWriter w = new StreamWriter("/mydata/settings.json"))
                 {
                     string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
                     w.WriteLine(json);
@@ -162,7 +162,7 @@ namespace xComfortWingman
         {
             try
             {
-                using (StreamWriter w = new StreamWriter("settings.json"))
+                using (StreamWriter w = new StreamWriter("/mydata/settings.json"))
                 {
                     w.WriteLine(json);
                 }
@@ -185,7 +185,7 @@ namespace xComfortWingman
             try
             {
                 Settings settings;
-                using (StreamReader r = new StreamReader("settings.json"))
+                using (StreamReader r = new StreamReader("/mydata/settings.json"))
                 {
                     string json = r.ReadToEnd();
                     settings = JsonConvert.DeserializeObject<Settings>(json);
@@ -203,7 +203,7 @@ namespace xComfortWingman
             try
             {
                 Settings settings;
-                using (StreamReader r = new StreamReader("settings.json"))
+                using (StreamReader r = new StreamReader("/mydata/settings.json"))
                 {
                     string json = r.ReadToEnd();
                     settings = JsonConvert.DeserializeObject<Settings>(json);
