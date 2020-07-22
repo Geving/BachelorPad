@@ -13,8 +13,8 @@ namespace xComfortWingman
         {
             if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
-                //ConsoleColor fc = Console.ForegroundColor;
-                //ConsoleColor bc = Console.BackgroundColor;
+                ConsoleColor fc = Console.ForegroundColor;
+                ConsoleColor bc = Console.BackgroundColor;
                 String date = ($"{DateTime.Now.Year}-{DateTime.Now.Month.ToString("00")}-{DateTime.Now.Day.ToString("00")} {DateTime.Now.Hour.ToString("00")}:{DateTime.Now.Minute.ToString("00")}:{DateTime.Now.Second.ToString("00")}.{DateTime.Now.Millisecond.ToString("000")} - ");
                 String n = "";
                 if (newline) { n = "\n"; }
@@ -35,7 +35,9 @@ namespace xComfortWingman
                     case 3: // Default
                     default:
                         {
-                            Console.ResetColor();
+                            //Console.ResetColor();
+                            Console.ForegroundColor = fc;
+                            Console.BackgroundColor = bc;
                             break;
                         }
                     case 2: // Low
@@ -58,9 +60,9 @@ namespace xComfortWingman
                 }
                 Console.Write(date + text + n);
 
-                //Console.ForegroundColor = fc;
-                //Console.BackgroundColor = bc;
-                Console.ResetColor();
+                Console.ForegroundColor = fc;
+                Console.BackgroundColor = bc;
+                //Console.ResetColor();
             }
         }
 
@@ -83,6 +85,7 @@ namespace xComfortWingman
         {
             if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
+                ConsoleColor currentColor = Console.ForegroundColor;
                 String n = "";
                 if (newline) { n = "\n"; }
                 Console.Write("[");
@@ -109,7 +112,7 @@ namespace xComfortWingman
                     default: { break; }
                 }
                 Console.Write(text);
-                Console.ForegroundColor = ConsoleColor.Gray;
+                Console.ForegroundColor = currentColor;
                 Console.Write("]" + n);
             }
         }

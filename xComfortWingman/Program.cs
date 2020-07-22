@@ -131,10 +131,11 @@ namespace xComfortWingman
 
                 Stopwatch stopwatch = new Stopwatch();
                 stopwatch.Start();
-                DoLog("Importing datapoints from file...", false);
+                DoLog("Importing datapoints from '" + filePath + "'...", false);
 
                 if (!File.Exists(filePath))
                 {
+                    DoLog("FAILED", 3, false, 12);
                     DoLog("Attempting download...", false);
                     WebClient webClient = new WebClient();
                     webClient.DownloadFile("http://harald.geving.no/files/datenpunkte.txt", filePath);
@@ -145,6 +146,12 @@ namespace xComfortWingman
                         stopwatch.Reset();
                         DoLog("Datapoint file not found!");
                         return false;
+                    }
+                    else
+                    {
+                        DoLog("OK", 3, false, 10);
+                        DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                        stopwatch.Reset();
                     }
                 }
                 string aline;
