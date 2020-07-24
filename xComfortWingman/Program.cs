@@ -67,38 +67,7 @@ namespace xComfortWingman
             {
                 Settings.WriteSettingsToFile(Settings);
             }
-            //if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
-
-            //if(Settings.DEBUGMODE) { Console.WriteLine(Settings.GetSettingsAsJSON()); Console.ReadLine(); }
-
-            // For easier switching between developer machine and the Raspberry Pi meant for production use.
-            if (System.Net.Dns.GetHostName().ToUpper() == "ORION") 
-            {
-                Console.WriteLine("YOU ARE NOW RUNNING ON THE DEVELOPER MACHINE!");
-                Settings.MQTT_BASETOPIC = "debugdata";
-                if (ImportDatapointsFromFile("C:\\misc\\" + Settings.GENERAL_DATAPOINTS_FILENAME))
-                {
-                    CreateDevicesOutOfDatapoints();
-                    MQTT.RunMQTTClientAsync().Wait();
-
-                    MQTT.PublishHomieDeviceAsync(Homie.CreateDeviceFromDatapoint(CI.datapoints[4])).Wait();
-                    Console.WriteLine($"Publications: {MQTT.PublicationCounter}");
-                    CI.FakeData(new byte[] { 0x0D, 0xC1, 0x05, 0x70, 0x00, 0x62, 0x00, 0x00, 0x00, 0x00, 0x32, 0x10, 0x0B }).Wait();
-                    //CI.FakeData(new byte[] { 0x0D, 0xC1, 0x31, 0x62, 0x17, 0x00, 0x00, 0xC9, 0x00, 0x00, 0x44, 0x24, 0x01 }).Wait();
-                    while (StayAlive)
-                    {
-                        // Nada!
-                    };
-                };
-                Console.WriteLine("---------------------------------------------------------");
-                while (StayAlive)
-                {
-                    // Nada!
-                };
-                return;
-            };
-
-
+            
             BootWithoutError = ImportDatapointsFromFile(Settings.GENERAL_DATAPOINTS_FILENAME);
             if (BootWithoutError) { CreateDevicesOutOfDatapoints(); }
             //if (BootWithoutError) { PublishAutoConfigForAllDevices(); }
@@ -117,7 +86,6 @@ namespace xComfortWingman
             {
                 DoLog("Something failed during the program startup! Please check the logs for more info.",5);
             }
-
             DoLog("Terminating...", 4);
         }
 
@@ -143,23 +111,35 @@ namespace xComfortWingman
 
                 if (!File.Exists(filePath))
                 {
-                    DoLog("FAILED", 3, false, 12);
-                    DoLog("Attempting download...", false);
-                    WebClient webClient = new WebClient();
-                    webClient.DownloadFile("http://harald.geving.no/files/datenpunkte.txt", filePath);
-                    if (!File.Exists(filePath)) 
-                    { 
+                    bool DownloadOnFail = false; //Easy toggle
+                    if (DownloadOnFail)
+                    {
+                        DoLog("FAILED", 3, false, 12);
+                        DoLog("Attempting download...", false);
+                        WebClient webClient = new WebClient();
+                        webClient.DownloadFile("http://harald.geving.no/files/datenpunkte.txt", filePath);
+                        if (!File.Exists(filePath))
+                        {
+                            DoLog("FAILED", 3, false, 12);
+                            DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                            stopwatch.Reset();
+                            DoLog("Datapoint file not found!");
+                            return false;
+                        }
+                        else
+                        {
+                            DoLog("OK", 3, false, 10);
+                            DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                            stopwatch.Reset();
+                        }
+                    }
+                    else
+                    {
                         DoLog("FAILED", 3, false, 12);
                         DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                         stopwatch.Reset();
                         DoLog("Datapoint file not found!");
                         return false;
-                    }
-                    else
-                    {
-                        DoLog("OK", 3, false, 10);
-                        DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                        stopwatch.Reset();
                     }
                 }
                 string aline;
