@@ -145,6 +145,9 @@ namespace xComfortWingman
             var allHidList = list.GetHidDevices().ToArray();
             foreach (HidDevice dev in allHidList)
             {
+                DoLog("Found device:");
+                DoLog(dev.DevicePath);
+                DoLog(dev.VendorID + " " + dev.ProductID);
                 if (dev.VendorID == 0x188A && dev.ProductID == 0x1101)
                 {
                     //We have found the CI!
