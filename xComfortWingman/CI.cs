@@ -143,7 +143,8 @@ namespace xComfortWingman
             var list = DeviceList.Local;
             DoLog("Devices listed...");
             //list.Changed += (sender, e) => DoLog("Device list changed."); //We don't need to implement support for hotswap right now... 
-            var allHidList = list.GetHidDevices().ToArray();
+            //var allHidList = list.GetHidDevices().ToArray();
+            var allHidList = list.GetAllDevices().ToArray();
             DoLog("List converted to array...");
             DoLog("Devices found: " + allHidList.Length);
             foreach (HidDevice dev in allHidList)
