@@ -71,8 +71,8 @@ namespace xComfortWingman
             BootWithoutError = ImportDatapointsFromFile(Settings.GENERAL_DATAPOINTS_FILENAME);
             if (BootWithoutError) { CreateDevicesOutOfDatapoints(); }
             //if (BootWithoutError) { PublishAutoConfigForAllDevices(); }
-            if (BootWithoutError) { MQTT.RunMQTTClientAsync().Wait(); }
             if (BootWithoutError) { CI.ConnectToCI().Wait(); }
+            if (BootWithoutError) { MQTT.RunMQTTClientAsync().Wait(); }
             if (BootWithoutError)
             {
                 while (StayAlive)
