@@ -9,7 +9,7 @@ namespace xComfortWingman
 {
     class Menu
     {
-        private static readonly Settings def = new Settings();
+        private static Settings def = new Settings();
 
         public static void InfoMenu()
         {
@@ -23,7 +23,7 @@ namespace xComfortWingman
 
         public static void MainMenu()
         {
-            def.ResetToDefault();
+            def = Settings.DefaultSettings();
             Console.Clear();
             Console.WriteLine($"Welcome!");
             Console.WriteLine($"");
@@ -94,7 +94,7 @@ namespace xComfortWingman
                     {
                         Console.Clear();
                         Console.Write("Writing settings to file...");
-                        Console.WriteLine(Program.Settings.WriteSettingsToFile(Program.Settings) ? "[OK]" : "[FAIL]");
+                        Console.WriteLine(Settings.WriteSettingsToFile(Program.Settings, Settings.SettingsFilePath()) ? "[OK]" : "[FAIL]");
                         Console.WriteLine("Press any key to return to the menu...");
                         Console.ReadKey();
                         break;
@@ -102,7 +102,7 @@ namespace xComfortWingman
                 case "4":
                     {
                         Console.Write("Reading settings from file...");
-                        Program.Settings.LoadSettings();
+                        Program.Settings = Settings.ReadSettingsFromFile(Settings.SettingsFilePath());
                         Console.WriteLine("[Done]");
                         Console.WriteLine("Press anys key to return to the menu...");
                         Console.ReadKey();
@@ -111,7 +111,7 @@ namespace xComfortWingman
                 case "5":
                     {
                         Console.WriteLine("Please type 'default' to confirm that you want to reset all settings to their default values:");
-                        if (Console.ReadLine().Replace("'","") == "default" ) { Program.Settings.ResetToDefault(); }
+                        if (Console.ReadLine().Replace("'","") == "default" ) { Settings.ResetToDefault(); }
                         break;
                     }
                 case "0":

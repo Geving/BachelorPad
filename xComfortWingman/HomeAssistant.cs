@@ -8,12 +8,25 @@ namespace xComfortWingman
 {
     public class HomeAssistant
     {
-        public readonly static string BaseTopic = "wingman";
+        public readonly static string HomeAssistantBaseTopic = Program.Settings.HOMEASSISTANT_BASETOPIC; //"HomeAssistantBaseTopic";
+        public readonly static string AutoDiscoveryTopic = Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC; //"homeassistant";
+        public readonly static string AvailabilityTopic = Program.Settings.HOMEASSISTANT_AVAILABILITYTOPIC;
         
         public static List<Device> deviceList = new List<Device>();
 
         public static Device SetupNewDevice(Datapoint datapoint, string name = "")
         {
+            if (Program.Settings.GENERAL_FILTER_DUPLICATE_DP)
+            {
+                foreach(Device device in deviceList)
+                {
+                    if (device.DP == datapoint.DP)
+                    {
+                        MyLogger.DoLog($"Datapoint " + device.DP + " already exists! Skipping...", true);
+                        return device;
+                    }
+                }
+            }
             Device newDevice;
             switch (datapoint.Type)
             {
@@ -32,6 +45,7 @@ namespace xComfortWingman
                         break;
                     }
                 case 19:
+                case 22:
                 case 20: // Binary inputs
                     {
                         newDevice = new BinarySensor(datapoint);
@@ -43,15 +57,22 @@ namespace xComfortWingman
                         break;
                     }
             }
+            //Common data
+
+            //newDevice.Identifiers = $"{datapoint.DP}_{datapoint.Serial}";
             if (name != "") newDevice.Name = name;
+
+
+
             deviceList.Add(newDevice);
             return newDevice;
         }
 
         public static void Heartbeat(string payload = "online")
         {
-            MyLogger.DoLog($"Heartbeat...", true);    
-            MQTT.SendMQTTMessageAsync($"{BaseTopic}/availability", payload, false).Wait(new TimeSpan(0, 0, 0, 0, 50));
+            MyLogger.DoLog($"Sending Heartbeat...", true);    
+            MQTT.SendMQTTMessageAsync($"{AvailabilityTopic}", payload, true).Wait(new TimeSpan(0, 0, 0, 0, 50));
+            MQTT.TimeOfLastHeartbeat = DateTime.Now.Ticks;
             //MyLogger.DoLog("OK", 3, true, 10);
         }
 
@@ -73,10 +94,10 @@ namespace xComfortWingman
             public string Connections { get; set; }
             public string Identifiers { get; set; }
             public string Sw_version { get; set; }
-            public string Via_device { get; set; } = "Wingman";
+            public string Via_device { get; set; } = "xComfort2MQTT";
 
             //Common for all types
-            public string Availability_topic { get; set; } = $"{Program.Settings.MQTT_BASETOPIC}/{BaseTopic}/availability";
+            public string Availability_topic { get; set; } = $"{AvailabilityTopic}";
             public string Payload_available { get; set; } = "online";
             public string Payload_not_available { get; set; } = "offline";
             public string Payload_off { get; set; } = "ON";
@@ -87,16 +108,17 @@ namespace xComfortWingman
             public string State_off { get; set; } = "OFF";
             public string State_topic { get; set; } = "UndefinedStateTopic";
             public string Value_template { get; set; }
-
+            public string Command_topic { get; set; }
+            
             //public string[] ConfigString { get; set; } = new string[1];
             public Dictionary<string, string> AutoConfigs { get; set; } = new Dictionary<string, string>();
             public Dictionary<string, string> States = new Dictionary<string, string>();
-            
+           
         }
 
-        class Switch : Device
+        public class Switch : Device
         {
-            public string Command_topic { get; set; }
+            
             public string Icon { get; set; }
             public string Json_attributes_template { get; set; }
             public string Json_attributes_topic { get; set; }
@@ -105,38 +127,26 @@ namespace xComfortWingman
             public Switch(Datapoint datapoint)
             {
                 this.devtype = "Switch";
-                this.devtopic = $"{BaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
-                this.Config_topic = $"{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.devtopic = $"{HomeAssistantBaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.Config_topic = $"{AutoDiscoveryTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}/config";
                 //Return based solely on the datapoint provided
-                this.Name = SanitiseString(datapoint.Name);
+                this.Name = datapoint.PrettyName; //SanitiseString(datapoint.Name);
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 //this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
+                //this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
+                this.Identifiers = $"{datapoint.DP}_{datapoint.Serial}";
                 this.State_topic= $"{devtopic}/state";
                 this.Command_topic = $"{devtopic}/set";
-                //this.AutoConfigs.Add($"{{ " +
-                //    $"\"name\": \"{this.Name}_RSSI\", " +
-                //    $"\"unique_id\": \"{this.Identifiers}_RSSI\", " +
-                //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                //    $"\"device_class\": \"signal_strength\", " +
-                //    $"\"value_template\": \"{{{{ value_json.RSSI }}}}\" " +
-                //    $"}}");
-                //this.AutoConfigs.Add($"{{ " +
-                //    $"\"name\": \"{this.Name}_Battery\", " +
-                //    $"\"unique_id\": \"{this.Identifiers}_Battery\", " +
-                //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                //    $"\"device_class\": \"battery\", " +
-                //    $"\"value_template\": \"{{{{ value_json.battery }}}}\" " +
-                //    $"}}");
+                
                 this.AutoConfigs.Add(this.Config_topic,
                     $"{{ " +
                     $"\"name\": \"{this.Name}\", " +
                     $"\"unique_id\": \"{this.Identifiers}\", " +
-                    $"\"command_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.Command_topic}\", " +
-                    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                    $"\"command_topic\": \"{this.Command_topic}\", " +
+                    $"\"state_topic\": \"{this.State_topic}\", " +
                     $"\"value_template\": \"{{{{ value_json.state }}}}\", " +
-                     $"\"device\": {{" +
+                    $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
                                 $"    \"{this.Identifiers}\" " +
                                 $"  ], " +
@@ -145,20 +155,24 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"" +
                     $"}}");
+
+                //,"payload_available":"Online","payload_not_available":"Offline"
             }
-           
+
         }
 
-        partial class SensorBase : Device
+        public partial class SensorBase : Device
         {
             public int Expire_after { get; set; }
             public bool Force_update { get; set; }
 
         }
 
-        class BinarySensor : SensorBase
+        public class BinarySensor : SensorBase
         {
             //private static string[] BinarySensorClass = { "None", "battery", "battery_charging", "cold", "connectivity", "door", "garage_door", "gas", "heat", "light", "lock", "moisture", "motion", "moving", "occupancy", "opening", "plug", "power", "presence", "problem", "safety", "smoke", "sound", "vibration", "window" };
             public string Device_class { get; set; }// = BinarySensorClass[0];
@@ -168,60 +182,26 @@ namespace xComfortWingman
             public BinarySensor(Datapoint datapoint)
             {
                 this.devtype = "Binary_Sensor";
-                this.devtopic = $"{BaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
-                this.Config_topic = $"{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.devtopic = $"{HomeAssistantBaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.Config_topic = $"{AutoDiscoveryTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}/config";
                 //Return based solely on the datapoint provided
-                this.Name = SanitiseString(datapoint.Name);
+                this.Name = datapoint.PrettyName; //SanitiseString(datapoint.Name);
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 //this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString() + datapoint.Channel.ToString();
+                //this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString() + datapoint.Channel.ToString();
+                this.Identifiers = $"{datapoint.DP}_{datapoint.Serial}";
                 this.off_delay = 0;
                 this.Device_class = GetSensorTypeForDeviceType(datapoint.Type);
                 this.Expire_after = GetExpiryForDeviceType(datapoint.Type);
                 this.State_topic = $"{devtopic}/state";
-                ////this.AutoConfigs.Add(this.Config_topic + "_RSSI",
-                ////    $"{{ " +
-                ////    $"\"name\": \"{this.Name}_RSSI\", " +
-                ////    $"\"unique_id\": \"{this.Identifiers}_RSSI\", " +
-                ////    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                ////    $"\"device_class\": \"signal_strength\", " +
-                ////    $"\"value_template\": \"{{{{ value_json.RSSI }}}}\", " +
-                ////     $"\"device\": {{" +
-                ////                $"  \"identifiers\": [" +
-                ////                $"    \"{this.Identifiers}\" " +
-                ////                $"  ], " +
-                ////                $"  \"name\": \"{this.Name}\", " +
-                ////                $"  \"sw_version\": \"{this.Sw_version}\", " +
-                ////                $"  \"model\": \"{this.Model}\", " +
-                ////                $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                ////                $"}}," +
-                ////                $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                ////    $"}}");
-                ////this.AutoConfigs.Add(this.Config_topic + "_Battery",
-                ////    $"{{ " +
-                ////    $"\"name\": \"{this.Name}_Battery\", " +
-                ////    $"\"unique_id\": \"{this.Identifiers}_Battery\", " +
-                ////    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                ////    $"\"device_class\": \"battery\", " +
-                ////    $"\"value_template\": \"{{{{ value_json.battery }}}}\", " +
-                ////     $"\"device\": {{" +
-                ////                $"  \"identifiers\": [" +
-                ////                $"    \"{this.Identifiers}\" " +
-                ////                $"  ], " +
-                ////                $"  \"name\": \"{this.Name}\", " +
-                ////                $"  \"sw_version\": \"{this.Sw_version}\", " +
-                ////                $"  \"model\": \"{this.Model}\", " +
-                ////                $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                ////                $"}}," +
-                ////                $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                ////    $"}}");
+                
                 this.AutoConfigs.Add(this.Config_topic, // + "_State",
                     $"{{" +
                     $"\"name\": \"{this.Name}\", " +
                     $"\"unique_id\": \"{this.Identifiers}\", " +
-                    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                    $"\"json_attributes_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                    $"\"state_topic\": \"{this.State_topic}\", " +
+                    $"\"json_attributes_topic\": \"{this.State_topic}\", " +
                      $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
                                 $"    \"{this.Identifiers}\" " +
@@ -231,13 +211,15 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"," +
                     $"\"value_template\": \"{{{{ value_json.state }}}}\" " +
                     $"}}");
             }
         }
 
-        class Sensor : SensorBase
+        public class Sensor : SensorBase
         {
             //private static string[] SensorClass = { "None", "battery", "humidity", "illuminance", "signal_strength", "temperature", "power", "pressure", "timestamp" };
             public string Device_class { get; set; } = "None";
@@ -247,54 +229,20 @@ namespace xComfortWingman
             public Sensor(Datapoint datapoint)
             {
                 this.devtype = "Sensor";
-                this.devtopic = $"{BaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
-                this.Config_topic = $"{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.devtopic = $"{HomeAssistantBaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.Config_topic = $"{AutoDiscoveryTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}/config";
                 //Return based solely on the datapoint provided
-                this.Name = SanitiseString(datapoint.Name);
+                this.Name = datapoint.PrettyName; //SanitiseString(datapoint.Name);
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 //this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.State_topic = $"{devtopic}/state";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
+                //this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
+                this.Identifiers = $"{datapoint.DP}_{datapoint.Serial}";
                 this.Device_class = GetSensorTypeForDeviceType(datapoint.Type);
                 this.Expire_after = GetExpiryForDeviceType(datapoint.Type);
                 this.Unit_of_measurement = GetSensorDataUnitForDeviceType(datapoint.Type);
-                //this.AutoConfigs.Add(this.Config_topic + "_RSSI",
-                //    $"{{ " +
-                //    $"\"name\": \"{this.Name}_RSSI\", " +
-                //    $"\"unique_id\": \"{this.Identifiers}_RSSI\", " +
-                //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                //    $"\"device_class\": \"signal_strength\", " +
-                //    $"\"value_template\": \"{{{{ value_json.RSSI }}}}\", " +
-                //    $"\"device\": {{" +
-                //                $"  \"identifiers\": [" +
-                //                $"    \"{this.Identifiers}\" " +
-                //                $"  ], " +
-                //                $"  \"name\": \"{this.Name}\", " +
-                //                $"  \"sw_version\": \"{this.Sw_version}\", " +
-                //                $"  \"model\": \"{this.Model}\", " +
-                //                $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                //                $"}}," +
-                //                $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                //    $"}}");
-                //this.AutoConfigs.Add(this.Config_topic + "_Battery",
-                //    $"{{ " +
-                //    $"\"name\": \"{this.Name}_Battery\", " +
-                //    $"\"unique_id\": \"{this.Identifiers}_Battery\", " +
-                //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                //    $"\"device_class\": \"battery\", " +
-                //    $"\"value_template\": \"{{{{ value_json.battery }}}}\", " +
-                //    $"\"device\": {{" +
-                //                $"  \"identifiers\": [" +
-                //                $"    \"{this.Identifiers}\" " +
-                //                $"  ], " +
-                //                $"  \"name\": \"{this.Name}\", " +
-                //                $"  \"sw_version\": \"{this.Sw_version}\", " +
-                //                $"  \"model\": \"{this.Model}\", " +
-                //                $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                //                $"}}," +
-                //                $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                //    $"}}");
+                
                 switch (datapoint.Type)
                 {
                     case 23: //Temperature sensor
@@ -304,10 +252,10 @@ namespace xComfortWingman
                                 $"{{" +
                                 $"\"name\": \"{this.Name}_Temperature_A\", " +
                                 $"\"unique_id\": \"{this.Identifiers}_A\", " +
-                                $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"state_topic\": \"{this.State_topic}\", " +
                                 $"\"device_class\": \"temperature\", " +
                                 $"\"unit_of_measurement\": \"{this.Unit_of_measurement}\", " +
-                                $"\"json_attributes_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"json_attributes_topic\": \"{this.State_topic}\", " +
                                 $"\"value_template\": \"{{{{ value_json.temperature_a }}}}\", " +
                                 $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
@@ -318,15 +266,17 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"" +
                                 $"}}");
                             this.AutoConfigs.Add(this.Config_topic + "_TempB",
                                 $"{{" +
                                 $"\"name\": \"{this.Name}_Temperature_B\", " +
                                 $"\"unique_id\": \"{this.Identifiers}_B\", " +
-                                $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"state_topic\": \"{this.State_topic}\", " +
                                 $"\"device_class\": \"temperature\", " +
-                                $"\"json_attributes_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"json_attributes_topic\": \"{this.State_topic}\", " +
                                 $"\"value_template\": \"{{{{ value_json.temperature_b }}}}\", " +
                                 $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
@@ -337,57 +287,22 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"" +
                                 $"}}");
                             break;
                         }
                     case 5: //Room controller
                         {
-                            /*
-                            {
-                                "payload_off": "OFF",
-                                "payload_on": "ON",
-                                "value_template": "{{ value_json.state }}",
-                                "command_topic": "myhome/zigbee2mqtt/SocketOffice/set",
-                                "state_topic": "myhome/zigbee2mqtt/SocketOffice",
-                                "json_attributes_topic": "myhome/zigbee2mqtt/SocketOffice",
-                                "name": "SocketOffice_switch",
-                                "unique_id": "0x000d6ffffef352b0_switch_myhome/zigbee2mqtt",
-                                "device": {
-                                "identifiers": [
-                                    "zigbee2mqtt_0x000d6ffffef352b0"
-                                ],
-                                "name": "SocketOffice",
-                                "sw_version": "Zigbee2mqtt 1.13.0",
-                                "model": "TRADFRI control outlet (E1603/E1702)",
-                                "manufacturer": "IKEA"
-                                },
-                                "availability_topic": "myhome/zigbee2mqtt/bridge/state"
-                            } 
-                            */
-
-                            //this.AutoConfigs.Add(this.Config_topic,
-                            //    $"\"device\": {{" +
-                            //    $"  \"identifiers\": [" +
-                            //    $"    \"{this.Identifiers}\" " +
-                            //    $"  ], " +
-                            //    $"  \"name\": \"{this.Name}\", " +
-                            //    $"  \"sw_version\": \"{this.Sw_version}\", " +
-                            //    $"  \"model\": \"{this.Model}\", " +
-                            //    $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                            //    $"}}," +
-                            //    $"\"availability_topic\": \"{this.Availability_topic}\""
-                            //    );
-
-
                             this.AutoConfigs.Add(this.Config_topic, // + "_Temp",
                                 $"{{" +
                                 $"\"name\": \"{this.Name}_Temperature\", " +
                                 $"\"unique_id\": \"{this.Identifiers}_T\", " +
-                                $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"state_topic\": \"{this.State_topic}\", " +
                                 $"\"device_class\": \"temperature\", " +
                                 $"\"unit_of_measurement\": \"{this.Unit_of_measurement}\", " +
-                                $"\"json_attributes_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"json_attributes_topic\": \"{this.State_topic}\", " +
                                 $"\"value_template\": \"{{{{ value_json.temperature }}}}\", " +
                                 $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
@@ -398,25 +313,11 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"" +
                                 $"}}");
-                            //this.AutoConfigs.Add(this.Config_topic + "_Wheel",
-                            //    $"{{" +
-                            //    $"\"name\": \"{this.Name}_Wheel\", " +
-                            //    $"\"unique_id\": \"{this.Identifiers}_W\", " +
-                            //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                            //    $"\"value_template\": \"{{{{ value_json.wheel }}}}\", " +
-                            //     $"\"device\": {{" +
-                            //    $"  \"identifiers\": [" +
-                            //    $"    \"{this.Identifiers}\" " +
-                            //    $"  ], " +
-                            //    $"  \"name\": \"{this.Name}\", " +
-                            //    $"  \"sw_version\": \"{this.Sw_version}\", " +
-                            //    $"  \"model\": \"{this.Model}\", " +
-                            //    $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                            //    $"}}," +
-                            //    $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                            //    $"}}");
+                          
 
                             break; 
                         }
@@ -426,9 +327,9 @@ namespace xComfortWingman
                                 $"{{" +
                                 $"\"name\": \"{this.Name}_Temperature\", " +
                                 $"\"unique_id\": \"{this.Identifiers}_T\", " +
-                                $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"state_topic\": \"{this.State_topic}\", " +
                                 $"\"schema\": \"json\", " +
-                                $"\"json_attributes_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"json_attributes_topic\": \"{this.State_topic}\", " +
                                 $"\"value_template\": \"{{{{ value_json.temperature }}}}\", " +
                                 $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
@@ -439,44 +340,10 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"" +
                                 $"}}");
-                            //this.AutoConfigs.Add(this.Config_topic + "_Wheel",
-                            //    $"{{" +
-                            //    $"\"name\": \"{this.Name}_Wheel\", " +
-                            //    $"\"unique_id\": \"{this.Identifiers}_W\", " +
-                            //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                            //    $"\"schema\": \"json\", " +
-                            //    $"\"value_template\": \"{{{{ value_json.wheel }}}}\", " +
-                            //    $"\"device\": {{" +
-                            //    $"  \"identifiers\": [" +
-                            //    $"    \"{this.Identifiers}\" " +
-                            //    $"  ], " +
-                            //    $"  \"name\": \"{this.Name}\", " +
-                            //    $"  \"sw_version\": \"{this.Sw_version}\", " +
-                            //    $"  \"model\": \"{this.Model}\", " +
-                            //    $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                            //    $"}}," +
-                            //    $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                            //    $"}}");
-                            //this.AutoConfigs.Add(this.Config_topic + "_Humid",
-                            //    $"{{" +
-                            //    $"\"name\": \"{this.Name}_Humidity\", " +
-                            //    $"\"unique_id\": \"{this.Identifiers}_H\", " +
-                            //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                            //    $"\"schema\": \"json\", " +
-                            //    $"\"value_template\": \"{{{{ value_json.humidity }}}}\", " +
-                            //    $"\"device\": {{" +
-                            //    $"  \"identifiers\": [" +
-                            //    $"    \"{this.Identifiers}\" " +
-                            //    $"  ], " +
-                            //    $"  \"name\": \"{this.Name}\", " +
-                            //    $"  \"sw_version\": \"{this.Sw_version}\", " +
-                            //    $"  \"model\": \"{this.Model}\", " +
-                            //    $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                            //    $"}}," +
-                            //    $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                            //    $"}}");
                             break;
                         }
                     default:
@@ -485,8 +352,8 @@ namespace xComfortWingman
                                 $"{{" +
                                 $"\"name\": \"{this.Name}\", " +
                                 $"\"unique_id\": \"{this.Identifiers}\", " +
-                                $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                                $"\"json_attributes_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                                $"\"state_topic\": \"{this.State_topic}\", " +
+                                $"\"json_attributes_topic\": \"{this.State_topic}\", " +
                                 $"\"value_template\": \"{{{{ value_json.state }}}}\", " +
                                 $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
@@ -497,7 +364,9 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"" +
                                 $"}}");
                             break;
                         }
@@ -507,7 +376,7 @@ namespace xComfortWingman
             }
         }
 
-        class Light : Device
+        public class Light : Device
         {
             public string Brightness_command_topic { get; set; }
             public int Brightness_scale { get; set; }
@@ -544,44 +413,29 @@ namespace xComfortWingman
             {
                 this.devtype = "Light";
                 this.ReadOnly = false;
-                this.devtopic = $"{BaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
-                this.Config_topic = $"{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.devtopic = $"{HomeAssistantBaseTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}";
+                this.Config_topic = $"{AutoDiscoveryTopic}/{devtype.ToLower()}/{SanitiseString(datapoint.Name)}/config";
                 //Return based solely on the datapoint provided
-                this.Name = SanitiseString(datapoint.Name);
+                this.Name = datapoint.PrettyName; //SanitiseString(datapoint.Name);
                 this.Model = GetModelNameForDeviceType(datapoint.Type);
                 //this.Availability_topic = $"{devtopic}/{Availability_topic}";
                 this.DP = datapoint.DP;
-                this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
+                //this.Identifiers = datapoint.DP.ToString() + datapoint.Serial.ToString();
+                this.Identifiers = $"{datapoint.DP}_{datapoint.Serial}";
                 this.Brightness_scale = 100;
                 this.Brightness_command_topic = $"{devtopic}/set";
                 this.Brightness_state_topic = $"{devtopic}/brightness";
-                this.State_topic = Brightness_state_topic; // $"{devtopic}/state";
-                //this.AutoConfigs.Add(this.Config_topic + "_RSSI", 
-                //    $"{{ " +
-                //    $"\"name\": \"{this.Name}_RSSI\", " +
-                //    $"\"unique_id\": \"{this.Identifiers}_RSSI\", " +
-                //    $"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                //    $"\"device_class\": \"signal_strength\", " +
-                //    $"\"value_template\": \"{{{{ value_json.RSSI }}}}\", " +
-                //    $"\"device\": {{" +
-                //                $"  \"identifiers\": [" +
-                //                $"    \"{this.Identifiers}\" " +
-                //                $"  ], " +
-                //                $"  \"name\": \"{this.Name}\", " +
-                //                $"  \"sw_version\": \"{this.Sw_version}\", " +
-                //                $"  \"model\": \"{this.Model}\", " +
-                //                $"  \"manufacturer\": \"{this.Manufacturer}\"" +
-                //                $"}}," +
-                //                $"\"availability_topic\": \"{this.Availability_topic}\"" +
-                //    $"}}");
+                this.State_topic = $"{devtopic}/state"; //this.Brightness_state_topic; // $"{devtopic}/state";
+                this.Command_topic = $"{devtopic}/set"; 
+                
                 this.AutoConfigs.Add(this.Config_topic, // + "_Brightness",
                     $"{{" +
                     $"\"name\": \"{this.Name}\", " +
                     $"\"unique_id\": \"{this.Identifiers}\", " +
-                    //$"\"state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
-                    $"\"command_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.Brightness_command_topic}\", " +
-                    //$"\"brightness_state_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.brightness_state_topic}\", " +
-                    //$"\"brightness_command_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.brightness_command_topic}\", " +
+                    $"\"state_topic\": \"{this.State_topic}\", " +
+                    $"\"command_topic\": \"{this.Command_topic}\", " +
+                    //$"\"brightness_state_topic\": \"{this.Brightness_state_topic}\", " +
+                    //$"\"brightness_command_topic\": \"{this.Brightness_command_topic}\", " +
                     $"\"brightness_scale\": 100, " +
                     $"\"brightness\": true, " +
                     //$"\"optimistic\": true, " +
@@ -589,7 +443,7 @@ namespace xComfortWingman
                     $"\"schema\": \"json\", " +
                     //$"\"brightness_value_template\": \"{{{{ brightness_state_json.Brightness }}}}\", " +
                     //$"\"state_value_template\": \"{{{{ state_value_json.Brightness }}}}\", " +
-                    $"\"json_attributes_topic\": \"{Program.Settings.MQTT_BASETOPIC}/{this.State_topic}\", " +
+                    $"\"json_attributes_topic\": \"{this.State_topic}\", " +
                     $"\"value_template\": \"{{{{ value_json.brightness }}}}\", " +
                     $"\"device\": {{" +
                                 $"  \"identifiers\": [" +
@@ -600,12 +454,14 @@ namespace xComfortWingman
                                 $"  \"model\": \"{this.Model}\", " +
                                 $"  \"manufacturer\": \"{this.Manufacturer}\"" +
                                 $"}}," +
-                                $"\"availability_topic\": \"{this.Availability_topic}\"" +
+                    $"\"availability_topic\": \"{this.Availability_topic}\"," +
+                    $"\"payload_available\": \"{this.Payload_available}\"," +
+                    $"\"payload_not_available\": \"{this.Payload_not_available}\"" +
                     $"}}");
             }
         }
 
-        class Trigger : Device
+        public class Trigger : Device
         {
             private static string[] types = { "button_short_press", "button_short_release", "button_long_press", "button_long_release", "button_double_press", "button_triple_press", "button_quadruple_press", "button_quintuple_press" };
             private static string[] subtypes = { "turn_on", "turn_off", "button_1", "button_2", "button_3", "button_4", "button_5", "button_6" };
@@ -627,7 +483,7 @@ namespace xComfortWingman
             }
         }
 
-        class Cover : Device
+        public class Cover : Device
         {
             public int position_closed;
             public int position_open;
@@ -670,7 +526,7 @@ namespace xComfortWingman
             }
         }
 
-        class Lock : Device
+        public class Lock : Device
         {
             //public string devtype = "Lock";
             public string payload_lock = "LOCK";
@@ -680,7 +536,7 @@ namespace xComfortWingman
 
         }
 
-        class HVAC : Device
+        public class HVAC : Device
         {
             //public string devtype = "HVAC";
             public string action_template;
@@ -776,7 +632,7 @@ namespace xComfortWingman
             }
         }
 
-        static string GetModelNameForDeviceType(int type)
+        public static string GetModelNameForDeviceType(int type)
         {
             switch (type)
             {
@@ -925,8 +781,8 @@ namespace xComfortWingman
                     return "Unknown";
             }
         }
-        
-        static string GetSensorTypeForDeviceType(int type)
+
+        public static string GetSensorTypeForDeviceType(int type)
         {
             // Legal values:  "None", "battery", "humidity", "illuminance", "signal_strength", "temperature", "power", "pressure", "timestamp"
             // For Binary type: "None", "battery", "battery_charging", "cold", "connectivity", "door", "garage_door", "gas", "heat", "light", "lock", "moisture", "motion", "moving", "occupancy", "opening", "plug", "power", "presence", "problem", "safety", "smoke", "sound", "vibration", "window"
@@ -968,7 +824,7 @@ namespace xComfortWingman
             }
         }
 
-        static int GetExpiryForDeviceType(int type)
+        public static int GetExpiryForDeviceType(int type)
         {
             return 3600;
         }
@@ -1018,41 +874,6 @@ namespace xComfortWingman
             return System.Text.RegularExpressions.Regex.Replace(str, "[^a-zA-Z0-9]+", "", System.Text.RegularExpressions.RegexOptions.Compiled);
         }
 
-        //public void UpdateDeviceState(int DP)
-        //{
-        //    UpdateDeviceState(HomeAssistant.deviceList.Find(d => d.DP == DP));
-        //}
-
-        //public void UpdateDeviceState(Device device)
-        //{
-
-        //}
-        //public static async Task UpdateSingleProperty(int DP, byte typeOfData, byte[] databyte)
-        //{
-        //    Device device = deviceList.Find(d => d.DP == DP);
-        //    if (typeOfData==0x17) // It's a Room Controller!
-        //    {
-        //        string[] mixedData = CI.GetDataFromPacket(databyte, typeOfData, "").Split(';');
-        //        if (device.States.ContainsKey("temperature"))
-        //        {
-        //            device.States["temperature"] = mixedData[0];
-        //        }
-        //        else
-        //        {
-        //            device.States.Add("temperature",mixedData[0]);
-        //        }
-        //        if (device.States.ContainsKey("wheel"))
-        //        {
-        //            device.States["wheel"] = mixedData[1];
-        //        }
-        //        else
-        //        {
-        //            device.States.Add("wheel", mixedData[1]);
-        //        }
-        //    }
-        //}
-
-
         public static async Task UpdateDeviceData(Protocol.PT_RX.Packet packet)
         {
             Datapoint datapoint = CI.datapoints.Find(x => x.DP == packet.MGW_RX_DATAPOINT);
@@ -1062,7 +883,7 @@ namespace xComfortWingman
             //string newData = CI.GetDataFromPacket(packet.MGW_RX_DATA, packet.MGW_RX_DATA_TYPE, "");
             device.States.Clear();
             device.States.Add("RSSI", packet.MGW_RX_RSSI.ToString());
-            device.States.Add("battery", packet.MGW_RX_BATTERY.ToString());
+            
 
             switch (packet.MGW_RX_DATA_TYPE)
             {
@@ -1072,12 +893,31 @@ namespace xComfortWingman
                         {
                             case "Light":
                                 {
-                                    device.States.Add("brightness", packet.MGW_RX_INFO_SHORT.ToString());
+                                    device.States.Add("state", (packet.MGW_RX_INFO_SHORT > 0x02 ? "ON" : "OFF"));
+                                    if (Program.Settings.HOMEASSISTANT_USE255ASMAX)
+                                    {
+                                        double newVal = packet.MGW_RX_INFO_SHORT * 2.55;
+                                        device.States.Add("brightness", ((int)newVal).ToString());
+                                    }
+                                    else
+                                    {
+                                        device.States.Add("brightness", packet.MGW_RX_INFO_SHORT.ToString());
+                                    }
                                     break;
                                 }
                             case "Switch":
                                 {
-                                    device.States.Add("state", (packet.MGW_RX_INFO_SHORT > 0x00 ? "ON" : "OFF"));
+                                    string s = "UNKNOWN";
+                                    switch (packet.MGW_RX_INFO_SHORT)
+                                    {
+                                        case 0x00: { s = "OFF"; break; }
+                                        case 0x01: { s = "ON"; break; }
+                                        case 0x02: { s = "UP"; break; }
+                                        case 0x03: { s = "DOWN"; break; }
+                                        default: { s = packet.MGW_RX_INFO_SHORT.ToString(); break; }
+                                    }
+                                    device.States.Add("state", s);
+                                    device.States.Add("battery", packet.MGW_RX_BATTERY.ToString());
                                     break;
                                 }
                             //case "Sensor":
@@ -1092,6 +932,7 @@ namespace xComfortWingman
                             //    }
                             default:
                                 {
+                                    device.States.Add("battery", packet.MGW_RX_BATTERY.ToString());
                                     device.States.Add("state", packet.MGW_RX_INFO_SHORT.ToString());
                                     device.States.Add("MsgType", Protocol.PT_RX.MGW_RX_MSG_TYPE.GetTechnicalNameFromByte(packet.MGW_RX_MSG_TYPE));
                                     device.States.Add("DataType", Protocol.PT_RX.MGW_RX_DATA_TYPE.GetNameFromByte(packet.MGW_RX_DATA_TYPE));
@@ -1102,11 +943,20 @@ namespace xComfortWingman
                     }
                 case 0x01: //MGW_RDT_PERCENT - Dimmer value
                     {
-                        device.States.Add("brightness", packet.MGW_RX_INFO_SHORT.ToString());
+                        if (Program.Settings.HOMEASSISTANT_USE255ASMAX)
+                        {
+                            double newVal = packet.MGW_RX_INFO_SHORT * 2.55;
+                            device.States.Add("brightness", ((int)newVal).ToString());
+                        }
+                        else
+                        {
+                            device.States.Add("brightness", packet.MGW_RX_INFO_SHORT.ToString());
+                        }
                         break;
                     }
                 case 0x17: //MGW_RDT_RC_DATA - Room Controller data
                     {
+                        device.States.Add("battery", packet.MGW_RX_BATTERY.ToString());
                         string mixedData = CI.GetDataFromPacket(packet.MGW_RX_DATA, packet.MGW_RX_DATA_TYPE, "");
                         device.States.Add("temperature", mixedData.Split(';')[1]);
                         device.States.Add("wheel", mixedData.Split(';')[0]);
@@ -1114,6 +964,7 @@ namespace xComfortWingman
                     }
                 default:
                     {
+                        device.States.Add("battery", packet.MGW_RX_BATTERY.ToString());
                         device.States.Add("state", packet.MGW_RX_INFO_SHORT.ToString());
                         device.States.Add("MsgType", Protocol.PT_RX.MGW_RX_MSG_TYPE.GetTechnicalNameFromByte(packet.MGW_RX_MSG_TYPE));
                         device.States.Add("DataType", Protocol.PT_RX.MGW_RX_DATA_TYPE.GetNameFromByte(packet.MGW_RX_DATA_TYPE));
@@ -1121,54 +972,69 @@ namespace xComfortWingman
                     }
             }
 
+
             string finalState = "{";
             foreach(KeyValuePair<string, string> keyValuePair in device.States)
             {
-                finalState += $"\"{keyValuePair.Key}\": \"{keyValuePair.Value}\", ";
+                if (keyValuePair.Key == "brightness")
+                {
+                    finalState += $"\"{keyValuePair.Key}\": {keyValuePair.Value}, ";
+                } else
+                {
+                    finalState += $"\"{keyValuePair.Key}\": \"{keyValuePair.Value}\", ";
+                }
+                
             }
             finalState = finalState[0..^2] + "}"; //Remove last comma, finishes the JSON.
 
             MyLogger.DoLog($"Updating data for {device.Name}...", 4);
-
+            
             await MQTT.SendMQTTMessageAsync(device.State_topic, finalState, device.Retain);
         }
 
-        public static bool ReloadAutoConfig()
+        public static bool ReloadAutoConfig(int SingleDP=0)
         {
-            ClearAutoConfig();
+            ClearAutoConfig(SingleDP);
             Thread.Sleep(1000);
-            SendAutoConfig();
+            SendAutoConfig(SingleDP);
             return true;
         }
 
-        public static bool ClearAutoConfig()
+        public static bool ClearAutoConfig(int SingleDP=0)
         {
-            foreach(Device device in deviceList)
+            foreach (Device device in deviceList)
             {
-                MyLogger.DoLog("Removing Auto Config data for " + device.Name + "...", false);
-                //if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{device.Config_topic}/config", true); }
-                MQTT.SendMQTTMessageAsync(device.Config_topic + "/config", "", false).Wait(new TimeSpan(0,0,0,0,50));
-                foreach (KeyValuePair<string, string> conf in device.AutoConfigs)
+                if (SingleDP == 0 || device.DP == SingleDP)
                 {
-                    //if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{conf.Key}/config", true); }
-                    MQTT.SendMQTTMessageAsync($"{conf.Key}/config", "", false).Wait(new TimeSpan(0, 0, 0, 0, 50));
+                    MyLogger.DoLog("Removing Auto Config data for " + device.Name + "...", false);
+                    //if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{device.Config_topic}/config", true); }
+                    MQTT.SendMQTTMessageAsync(device.Config_topic + "", "", false).Wait(new TimeSpan(0, 0, 0, 0, 50));
+                    foreach (KeyValuePair<string, string> conf in device.AutoConfigs)
+                    {
+                        //if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{conf.Key}/config", true); }
+                        MQTT.SendMQTTMessageAsync($"{conf.Key}", "", false).Wait(new TimeSpan(0, 0, 0, 0, 50));
+                    }
+                    MyLogger.DoLog("OK", 3, true, 10);
                 }
-                MyLogger.DoLog("OK", 3, true, 10);
             }
             return true;
         }
-         public static bool SendAutoConfig()
+         public static bool SendAutoConfig(int SingleDP=0)
         {
             
             foreach(Device device in deviceList)
             {
-                MyLogger.DoLog("Sending Auto Config data for " + device.Name + "...", false);
-                foreach(KeyValuePair<string,string> conf in device.AutoConfigs)
+                if (SingleDP == 0 || device.DP == SingleDP)
                 {
-                    if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{conf.Key}/config", true); }
-                    MQTT.SendMQTTMessageAsync($"/{conf.Key}/config", conf.Value, false).Wait(new TimeSpan(0, 0, 0, 0, 50));
+                    MyLogger.DoLog("Sending Auto Config data for " + device.Name + "...", false);
+                    foreach (KeyValuePair<string, string> conf in device.AutoConfigs)
+                    {
+                        if (Program.Settings.GENERAL_DEBUGMODE) { MyLogger.DoLog($"{conf.Key}", true); }
+                        MQTT.SendMQTTMessageAsync($"{conf.Key}", conf.Value, false).Wait(new TimeSpan(0, 0, 0, 0, 250));
+                        Thread.Sleep(300);
+                    }
+                    MyLogger.DoLog("OK", 3, true, 10);
                 }
-                MyLogger.DoLog("OK", 3, true, 10);
             }
             return true;
         }

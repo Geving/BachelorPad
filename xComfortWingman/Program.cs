@@ -8,13 +8,20 @@ namespace xComfortWingman
 {
     class Program
     {
-        public static Settings Settings = new Settings(true);
+        public static Settings Settings = xComfortWingman.Settings.GetSettings(true);
+        
         public static readonly DateTime ApplicationStart = DateTime.Now;
         public static bool BootWithoutError = true;
         private static bool IllegalArguments = false;
         public static bool StayAlive = true;
+
         static void Main(string[] args)
         {
+            //Setup Console based on settings file
+            Console.ForegroundColor = (ConsoleColor)Settings.GENERAL_FORECOLOR;
+            Console.BackgroundColor = (ConsoleColor)Settings.GENERAL_BACKCOLOR;
+            Console.WindowWidth = Settings.GENERAL_WINDOWWIDTH;
+
             //dotnet publish "C:\Users\harald.geving\Source\Repos\BachelorPad\" --configuration Release --framework netcoreapp3.1 --self-contained false --runtime linux-arm --verbosity quiet
             //clear; dotnet publish -r linux-arm -o \\192.168.0.3\c$\wwwpub\harald.geving.no\files
 
@@ -36,9 +43,6 @@ namespace xComfortWingman
                     case "-nope": { ; break; };
                     case "-debug": { Settings.GENERAL_DEBUGMODE = true; break; };
                     case "-nodebug": { Settings.GENERAL_DEBUGMODE = false; break; };
-                    case "-ad0": { Settings.HOMEASSISTANT_DISCOVERYTOPIC = ""; break; };
-                    case "-ad1": { Settings.HOMEASSISTANT_DISCOVERYTOPIC = "myhome"; break; };
-                    case "-ad2": { Settings.HOMEASSISTANT_DISCOVERYTOPIC = "homeassistant"; break; };
                     case "-s": { Menu.ProcessGroup("all", true); break; }
                     //case "-clear": { if(HomeAssistant.ClearAutoConfig()==true) return; break; }
                     default:
@@ -55,24 +59,29 @@ namespace xComfortWingman
             }
             if (IllegalArguments) { return; }
 
-            //Menu.MainMenu();
-            Console.BackgroundColor = ConsoleColor.Black;
+            Logo.DrawLogo((new Random()).Next(0,5));
 
             DoLog("Starting xComfort2MQTT bridge...",4);
-            if (File.Exists("/mydata/settings.json"))
+            if (Settings.GENERAL_FROM_FILE)
             {
-                Settings.ReadSettingsFromFile();
-            } 
-            else
+                DoLog($"Using external settings file: {Settings.SettingsFilePath()}", 3, true);
+                
+            } else
             {
-                Settings.WriteSettingsToFile(Settings);
+                DoLog($"Using default settings", 2, true);
             }
-            
+            if (System.IO.File.Exists(Settings.GENERAL_DP_NAMES_FILENAME))
+            {
+                DoLog($"Using external name file: {Settings.GENERAL_DP_NAMES_FILENAME}", 2, true);
+            }
+
+
             BootWithoutError = ImportDatapointsFromFile(Settings.GENERAL_DATAPOINTS_FILENAME);
             if (BootWithoutError) { CreateDevicesOutOfDatapoints(); }
             //if (BootWithoutError) { PublishAutoConfigForAllDevices(); }
-            if (BootWithoutError) { CI.ConnectToCI().Wait(); }
             if (BootWithoutError) { MQTT.RunMQTTClientAsync().Wait(); }
+            if (BootWithoutError) { CI.ConnectToCI().Wait(); }
+
             if (BootWithoutError)
             {
                 while (StayAlive)
@@ -154,6 +163,35 @@ namespace xComfortWingman
                     }
                 }
                 fileStream.Close();
+
+
+                if (File.Exists(Settings.GENERAL_DP_NAMES_FILENAME))
+                {
+                    int LineCnt = 0;
+                    fileStream = new FileStream(Settings.GENERAL_DP_NAMES_FILENAME, FileMode.Open);
+                    using (StreamReader reader = new StreamReader(fileStream))
+                    {
+                        while ((aline = reader.ReadLine()) != null)
+                        {
+                            LineCnt++;
+                            if (aline[0] != ';' && aline[0] != '#') { //; or # are considered comments. All else will fail!
+                                try
+                                {
+                                    string[] line = aline.Split("\t");
+                                    int renameDP = Convert.ToInt32(line[0]);
+                                    CI.datapoints.Find(x => x.DP == renameDP).PrettyName = line[1];
+                                }catch (Exception exception2)
+                                {
+                                    DoLog($"Error in line {LineCnt} of {Settings.GENERAL_DP_NAMES_FILENAME}: [{aline}]", 4);
+                                    LogException(exception2);
+                                }
+                            }
+                        }
+                    }
+                    fileStream.Close();
+                }
+
+                    
                 DoLog("OK", 3, false, 10);
                 DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                 DoLog($"Total number of datapoints: ", false);
@@ -233,20 +271,38 @@ namespace xComfortWingman
         private static void CreateDevicesOutOfDatapoints()
         {
             Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-            DoLog("Creating devices from datapoints...", false);
-            foreach (Datapoint datapoint in CI.datapoints)
+
+            if (Program.Settings.HOMIE_USE_HOMIE)
             {
-                Homie.devices.Add(Homie.CreateDeviceFromDatapoint(datapoint));
-                HomeAssistant.SetupNewDevice(datapoint);
+                DoLog("Creating Homie devices from datapoints...", true);
+                stopwatch.Start();
+                foreach (Datapoint datapoint in CI.datapoints)
+                {
+                    Homie.devices.Add(Homie.CreateDeviceFromDatapoint(datapoint));
+                }
+                DoLog($"Total number of Homie devices: ", false);
+                DoLog($"{ Homie.devices.Count }", 3, false, 10);
+                DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                stopwatch.Reset();
             }
-            DoLog("OK", 3, false, 10);
-            DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-            stopwatch.Reset();
-            DoLog($"Total number of devices: ", false);
-            DoLog($"{ Homie.devices.Count}",3,true,10);
+
+            if (Program.Settings.HOMEASSISTANT_USE_HOMEASSISTANT)
+            {
+                DoLog("Creating Home Assistant devices from datapoints...", true);
+                stopwatch.Start();
+                foreach (Datapoint datapoint in CI.datapoints)
+                {
+                    HomeAssistant.SetupNewDevice(datapoint);
+                }
+                DoLog($"Total number of Home Assistant devices: ", false); 
+                DoLog($"{ HomeAssistant.deviceList.Count }", 3, false, 10);
+                DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                stopwatch.Reset();
+            }
         }
         #endregion
+
+        
 
     }
 }

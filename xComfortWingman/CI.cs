@@ -24,13 +24,14 @@ namespace xComfortWingman
     {
         static System.IO.Ports.SerialPort com;
         static HidDevice myDevice;
+        //static Device myDev;
         static HidStream myHidStream;
         private static bool readyToTransmit;
         private static List<byte> receivedData = new List<byte>();
         //static readonly DeviceTypeList dtl = new DeviceTypeList();
         private static bool acceptingData = false;
 
-        public static List<Datapoint> datapoints=new List<Datapoint>();
+        public static List<Datapoint> datapoints = new List<Datapoint>();
         //public static List<DeviceType> devicetypes = dtl.ListDeviceTypes();
 
         public static bool UseHomie = Program.Settings.HOMIE_USE_HOMIE;
@@ -60,7 +61,7 @@ namespace xComfortWingman
                 new DeviceType(16, "Binary Input, Battery",         "BI Batt",  (20),   new int[] { 1 },            new int[] { 0, 3 },         new byte[] { MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_SINGLE_ON }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"),
                 new DeviceType(17, "Binary Input, Battery",         "BI Batt",  (20),   new int[] { 1 },            new int[] { 1, 2 },         new byte[] { MGW_RMT_SWITCH_ON, MGW_RMT_SWITCH_OFF }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"),
                 new DeviceType(18, "Remote Control 12 Channel (old design)", "Rt 12 old", (21), new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 }, new int[] { 0 }, new byte[] { MGW_RMT_ON, MGW_RMT_OFF, MGW_RMT_UP_PRESSED, MGW_RMT_UP_RELEASED, MGW_RMT_DOWN_PRESSED, MGW_RMT_DOWN_RELEASED }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"),
-                new DeviceType(19, "Home-Manager",                  "HM",       (22),   new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99 }, new int[] { 0 }, new byte[] { }, new byte[] { }, "NoComment"),
+                new DeviceType(19, "Home-Manager",                  "HM",       (22),   new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99 }, new int[] { 0 }, new byte[] { MGW_RMT_ON, MGW_RMT_OFF }, new byte[] { MGW_RDT_NO_DATA }, "NoComment"),
                 new DeviceType(20, "Temperature Input",             "TI",       (23),   new int[] { 0, 1 },         new int[] { 0 },            new byte[] { MGW_RMT_TOO_COLD, MGW_RMT_TOO_WARM }, new byte[] { MGW_RDT_INT16_1POINT }, "NoComment"),
                 new DeviceType(21, "Temperature Input",             "TI",       (23),   new int[] { 0, 1 },         new int[] { 1 },            new byte[] { MGW_RMT_VALUE }, new byte[] { MGW_RDT_INT16_1POINT }, "NoComment"),
                 new DeviceType(22, "Analog Input",                  "AI",       (24),   new int[] { 0, 1 },         new int[] { 0 },            new byte[] { MGW_RMT_ON, MGW_RMT_OFF }, new byte[] { MGW_RDT_FLOAT }, "NoComment"),
@@ -118,9 +119,16 @@ namespace xComfortWingman
 
         public static async Task ConnectToCI()
         {
-            if (Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE)
+            if (Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.DUMMY_MODE)
             {
-                await ConnecAsHID(); //Connecting to CI as USB HID
+                //Let's just move on...
+                DoLog("Faking CI connection...", 7, true);
+                return;
+            }
+
+                if (Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.USB_MODE || Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.SPECIAL_MODE)
+            {
+                await ConnectAsHID(); //Connecting to CI as USB HID
                 if (myDevice == null)
                 {
                     DoLog("FAILED", 3, true, 12);
@@ -134,31 +142,44 @@ namespace xComfortWingman
             }
         }
 
-        private static async Task ConnecAsHID()
+        private static async Task ConnectAsHID()
+        {
+            await ConnectAsHID(Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.SPECIAL_MODE);
+        }
+
+        private static async Task ConnectAsHID(bool IsSpecial = false)
         {
             //Console.Write("Connecting to CI...");
             Stopwatch stopwatch = new Stopwatch();
             DoLog("Connecting to CI device...");//, false);
             stopwatch.Start();
-            var list = DeviceList.Local;
-            DoLog("Devices listed...");
-            //list.Changed += (sender, e) => DoLog("Device list changed."); //We don't need to implement support for hotswap right now... 
-            //var allHidList = list.GetHidDevices().ToArray();
-            var allHidList = list.GetAllDevices().ToArray();
-            DoLog("List converted to array...");
-            DoLog("Devices found: " + allHidList.Length);
-            foreach (HidDevice dev in allHidList)
-            {
-                DoLog("Found device:");
-                DoLog(dev.DevicePath);
-                DoLog(dev.VendorID + " " + dev.ProductID);
-                if (dev.VendorID == 0x188A && dev.ProductID == 0x1101)
+
+            if (!IsSpecial) {
+                var list = DeviceList.Local;
+                //DoLog("Devices listed...");
+                //list.Changed += (sender, e) => DoLog("Device list changed."); //We don't need to implement support for hotswap right now... 
+                //var allHidList = list.GetHidDevices().ToArray();
+
+                var allHidList = list.GetHidDevices().ToArray();
+                //DoLog("List converted to array...");
+                DoLog("Devices found: " + allHidList.Length);
+                foreach (HidDevice dev in allHidList)
                 {
-                    //We have found the CI!
-                    myDevice = dev;
-                    break;
+                    //DoLog("Found device: " + dev.DevicePath);
+                    //DoLog(dev.VendorID + " " + dev.ProductID);
+                    if (dev.VendorID == 0x188A && dev.ProductID == 0x1101)
+                    {
+                        //We have found the CI!
+                        myDevice = dev;
+                        break;
+                    }
                 }
             }
+            else
+            {
+                DoLog("Special USB connection mode!", 7, true);
+            }
+
             if (myDevice != null)
             {
                 var reportDescriptor = myDevice.GetReportDescriptor();
@@ -968,21 +989,25 @@ namespace xComfortWingman
                         case MGW_RMT_UP_PRESSED:
                             {
                                 //"Up" is pressed (and held)!
+                                BroadcastChange(datapoint.DP, "up_held", rxPacket);
                                 break;
                             }
                         case MGW_RMT_UP_RELEASED:
                             {
                                 //"Up" is released!
+                                BroadcastChange(datapoint.DP, "up_released", rxPacket);
                                 break;
                             }
                         case MGW_RMT_DOWN_PRESSED:
                             {
                                 //"Down" is pressed (and held)!
+                                BroadcastChange(datapoint.DP, "down_held", rxPacket);
                                 break;
                             }
                         case MGW_RMT_DOWN_RELEASED:
                             {
                                 //"Down" is released!
+                                BroadcastChange(datapoint.DP, "down_released", rxPacket);
                                 break;
                             }
                         case MGW_RMT_FORCED:
@@ -994,6 +1019,7 @@ namespace xComfortWingman
                         case MGW_RMT_SINGLE_ON:
                             {
                                 //Single contact
+                                BroadcastChange(datapoint.DP, "single", rxPacket);
                                 break;
                             }
                         case MGW_RMT_VALUE:

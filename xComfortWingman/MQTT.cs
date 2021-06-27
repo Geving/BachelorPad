@@ -11,6 +11,7 @@ using MQTTnet.Protocol;
 using System.Net.NetworkInformation;
 using static xComfortWingman.MyLogger;
 using System.Net;
+using HidSharp;
 
 namespace xComfortWingman
 {
@@ -27,6 +28,8 @@ namespace xComfortWingman
         public static bool UseHomie = Program.Settings.HOMIE_USE_HOMIE;
         public static bool UseBasic = Program.Settings.BASIC_USE_BASIC;
         public static bool UseHomeAssistant = Program.Settings.HOMEASSISTANT_USE_HOMEASSISTANT;
+        public static Int64 TimeOfLastMQTT = 0;
+        public static Int64 TimeOfLastHeartbeat = 0;
 
         public static async Task RunMQTTClientAsync()
         {
@@ -40,7 +43,7 @@ namespace xComfortWingman
                 var ClientID = settings.MQTT_CLIENT_ID.Replace("%rnd%", new Guid().ToString());
 
                 var WillMessage = new MqttApplicationMessageBuilder()
-                       .WithTopic((BasePublishingTopic + "/$state").Replace("//","/"))
+                       .WithTopic((BasePublishingTopic + "/$state").Replace("//", "/"))
                        .WithPayload("lost")
                        .WithAtLeastOnceQoS()
                        .WithRetainFlag(false)
@@ -80,7 +83,7 @@ namespace xComfortWingman
                         Credentials = Credentials,
                         ChannelOptions = ChannelOptions_TCP,
                         CommunicationTimeout = TimeSpan.FromSeconds(3),
-                        WillMessage=WillMessage
+                        WillMessage = WillMessage
                     };
                 }
                 else
@@ -92,21 +95,21 @@ namespace xComfortWingman
                         Credentials = Credentials,
                         ChannelOptions = ChannelOptions_WebSocket,
                         CommunicationTimeout = TimeSpan.FromSeconds(3),
-                        WillMessage=WillMessage
+                        WillMessage = WillMessage
                     };
 
                 }
 
                 // Assign events
                 mqttClient.ApplicationMessageReceived += async (s, e) => { await MqttClient_ApplicationMessageReceived(s, e); };
-                mqttClient.Connected += async (s, e) => {  await MqttClient_Connected(s, e); };
+                mqttClient.Connected += async (s, e) => { await MqttClient_Connected(s, e); };
                 mqttClient.Disconnected += async (s, e) => { await MqttClient_Disconnected(s, e); };
 
                 // Connect to the MQTT broker/server
                 try
                 {
                     DoLog("Connecting to MQTT server...", false);
-                    
+
                     Stopwatch stopwatch = new Stopwatch();
                     stopwatch.Start();
                     await mqttClient.ConnectAsync(clientOptions);
@@ -116,7 +119,7 @@ namespace xComfortWingman
                         //await SendMQTTMessageAsync("$state", "init", true);
                         stopwatch.Stop();
                         DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                        
+
                         //if (UseHomeAssistant)
                         //{
                         //    stopwatch.Start();
@@ -181,7 +184,7 @@ namespace xComfortWingman
             AutoReconnect = false; // We don't want to reconnect automatically...
             await mqttClient.DisconnectAsync(); // Disconnect the MQTT client from the broker
         }
-   
+
         private static async Task MqttClient_Connected(object sender, MqttClientConnectedEventArgs e)
         {
             try
@@ -191,15 +194,14 @@ namespace xComfortWingman
                 // Suscribe to our default topics
                 List<string> topics = new List<string>()
                  {
-                    $"{Program.Settings.MQTT_BASETOPIC}/$broadcast/#",      // Example: homie/$broadcast/alert ← "Intruder detected"
+                    //$"{Program.Settings.MQTT_BASETOPIC}/$broadcast/#",      // Example: homie/$broadcast/alert ← "Intruder detected"
                     $"{BasePublishingTopic}/get/",                          // Used for get-/setting data that's not part of the Homie specs, like
                     $"{BasePublishingTopic}/set/",                          // config files, config and such.
                     $"{BasePublishingTopic}/RAW/in/",                       // Allows the user to send raw bytes to the CI
                     $"{BasePublishingTopic}/raw/in/",                       // Same as RAW, but the bytes are now human readable strings "06 C1 04 ..."
                     $"{BasePublishingTopic}/cmd/",                          // A way to receive simple commands like "exit" 
-                    $"{BasePublishingTopic}/ad/",                          // A way to receive simple commands like "exit" 
-                    $"{BasePublishingTopic}/debug/",                          // A way to receive simple commands like "exit" 
-                    $"{Program.Settings.MQTT_BASETOPIC}/ClearAutoConfig"    // Nasty...
+                    $"{BasePublishingTopic}/ad/",                           // Changes Auto Discovery topic
+                    //$"{BasePublishingTopic}/debug/",                          // A way to receive simple commands like "exit" 
                     //$"{BasePublishingTopic}/shell/#"                      // Runs shell commands on the system. Potensial SECURITY HOLE
                 };
 
@@ -207,13 +209,18 @@ namespace xComfortWingman
                 {
                     foreach (HomeAssistant.Device device in HomeAssistant.deviceList)
                     {
-                        //DoLog(device.devtopic.Substring(HomeAssistant.BaseTopic.Length + 1) + "/config", true);
                         if (device.ReadOnly == false)
                         {
-                            topics.Add($"{device.devtopic}/set");
+                            topics.Add($"{device.Command_topic}");
+                            if (device.devtype == "Light")
+                            {
+                                HomeAssistant.Light light = (HomeAssistant.Light)device;
+                                if (device.ReadOnly == false && light.Command_topic!=light.Brightness_command_topic)
+                                {
+                                    topics.Add($"{light.Brightness_command_topic}");
+                                }
+                            }
                         }
-                        //Send Auto Config on every boot?
-                        //await SendMQTTMessageAsync(device.Config_topic + "/config", device.ConfigString, false);
                     }
                 }
 
@@ -247,22 +254,33 @@ namespace xComfortWingman
                 {
                     string topic = unsafetopic.Replace("//", "/");          // Depending on what the user has put in the settings file, this might contain //, so we remove them just in case.
                     await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic(topic).Build());
-                    if(topic.EndsWith("/")) { await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic(topic.Remove(topic.Length-1)).Build()); } // This allows us to subscribe to both topics at once.
+                    if (topic.EndsWith("/")) { await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic(topic.Remove(topic.Length - 1)).Build()); } // This allows us to subscribe to both topics at once.
                     if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Subscribing to {topic}", 2);
                 }
 
+                int BeatInterval = Program.Settings.HOMEASSISTANT_HEARTBEATINTERVAL;
                 int BeatCount = 0;
                 while (mqttClient.IsConnected && Program.StayAlive) // As long as we are connected, we need to send the stats periodically
                 {
-                    if (UseHomeAssistant) { 
-                        HomeAssistant.Heartbeat(); 
-                        if (BeatCount++ >= 10)
+                    if (
+                            UseHomeAssistant && 
+                            DateTime.Now.Ticks - TimeOfLastHeartbeat > (BeatInterval * 10000000) && 
+                            (
+                                DateTime.Now.Ticks - TimeOfLastMQTT > (3 * 10000000) ||
+                                DateTime.Now.Ticks - TimeOfLastHeartbeat > ((BeatInterval+10) * 10000000)
+                            )
+                        ) //This should prevent hearteats "in the middle of" other commands... 
+                    {
+                        HomeAssistant.Heartbeat();
+                        if (BeatCount++ >= Program.Settings.HOMEASSISTANT_AUTOCONFIGINTERVAL)
                         {
+                            if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Sending AutoConfig...", 2);
                             HomeAssistant.SendAutoConfig();
                             BeatCount = 0;
                         }
+                        //System.Threading.Thread.Sleep(Convert.ToInt32(Program.Settings.HOMEASSISTANT_HEARTBEATINTERVAL) * 1000);
                     }
-                    System.Threading.Thread.Sleep(Convert.ToInt32(Program.Settings.HOMIE_STATS_INTERVAL) * 1000);
+                    System.Threading.Thread.Sleep(1000);
                     //await Homie.PublishStats();
                 }
             }
@@ -271,7 +289,7 @@ namespace xComfortWingman
                 LogException(exception);
             }
         }
-      
+
         private static async Task MqttClient_ApplicationMessageReceived(object sender, MqttApplicationMessageReceivedEventArgs e)
         {
             // These are the topics we are subscribing to:
@@ -290,31 +308,84 @@ namespace xComfortWingman
             //$"{Program.Settings.MQTT_BASETOPIC}/$broadcast/#"
             //$"{BasePublishingTopic}/get/#" (and set/# and RAW/in and raw/in and cmd/# and shell/#)
 
-           
+
 
             string[] topics = e.ApplicationMessage.Topic.Split("/"); // Split the topic into levels
             string payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload); // e.ApplicationMessage.ConvertPayloadToString();
 
-            if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Incomming MQTT message: {e.ApplicationMessage.Topic}={payload}",2);
+            if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Incomming MQTT message: {e.ApplicationMessage.Topic}={payload}", 2);
 
             // (We trust that the MQTT subscription makes sure that we don't get any unwanted suff, so we don't have to check that ourselves.)
-            switch (topics[1]) // This will always be "$broadcast", "xComfort" or the name of a device.
+
+            if (UseHomeAssistant)
+            {
+                HomeAssistant.Device dev = HomeAssistant.deviceList.Find(x => x.Command_topic == e.ApplicationMessage.Topic);
+                if (dev == null) //Didn't match any Command topic, but still might match a brightness command topic...
+                {
+                    foreach (HomeAssistant.Device device in HomeAssistant.deviceList)
+                    {
+                        if (device.devtype == "Light")
+                        {
+                            HomeAssistant.Light light = (HomeAssistant.Light)device;
+                            if (e.ApplicationMessage.Topic == light.Brightness_command_topic) { dev = light; }
+                        }
+                    }
+                }
+                if (dev != null)
+                {
+                    Dictionary<string, string> payloadAttributes = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(payload);
+                    if (dev.devtype == "Light" && payloadAttributes.ContainsKey("brightness"))
+                    {
+                        await CI.SendNewValueToDatapointAsync(dev.DP, Convert.ToDouble(payloadAttributes["brightness"]));
+                    }
+                    else
+                    {
+                        await CI.SendNewValueToDatapointAsync(dev.DP, Convert.ToDouble(payloadAttributes["state"].Replace("ON", "100").Replace("OFF", "0")));
+                    }
+                    return;
+                }
+            }
+            //Didn't match any device topic...
+
+
+            if (topics[1] == "$broadcast")
+            {
+                // We have no real use for this at the moment, but we'll display and log it anyway.
+                DoLog($"Broadcasted message: {e.ApplicationMessage.Topic}={payload}", 4);
+            }
+
+            //if (topics[^2] == "set")
+            //{
+            //    //Find the correct datapoint
+            //    if (UseHomeAssistant)
+            //    {
+            //        foreach (HomeAssistant.Device device in HomeAssistant.deviceList)
+            //        {
+            //            if (device.devtopic == e.ApplicationMessage.Topic + "/set")
+            //            {
+
+            //            }
+            //        }
+            //    }
+            //}
+            switch (topics[1])
             {
                 case "$broadcast":      // It's a broadcast message for all devices
                     {
                         // We have no real use for this at the moment, but we'll display and log it anyway.
-                        DoLog($"Broadcasted message: {e.ApplicationMessage.Topic.ToString()}={payload}", 4);
+                        DoLog($"Broadcasted message: {e.ApplicationMessage.Topic}={payload}", 4);
                         break;
                     }
                 case "xComfort":    // It's one of six possible things
+                case "xcomfort2mqtt":    // It's one of six possible things
                     {
                         switch (topics[2])
                         {
                             case "get":
                                 {
-                                    if (topics.Length > 3 && topics[3] == "result") { DoLog("MQTT bug workaround!",2); break; } // A bug in the library. It doesn't properly unsubscribe to topics...
-                                    // Get and settable
-                                    if (payload=="config") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.GetSettingsAsJSON(), false);
+                                    if (topics.Length > 3 && topics[3] == "result") { DoLog("MQTT bug workaround!", 2); break; } // A bug in the library. It doesn't properly unsubscribe to topics...
+                                                                                                                                 // Get and settable
+                                    if (payload == "config") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.GetSettingsAsJSON(), false);
                                     if (payload == "datapoints") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.GetDatapointFile(), false);
                                     if (payload == "debug") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.GENERAL_DEBUGMODE.ToString(), false);
 
@@ -337,18 +408,14 @@ namespace xComfortWingman
                             case "set":
                                 {
                                     if (topics.Length > 3 && topics[3] == "result") { DoLog("MQTT bug workaround!", 2); break; } // A bug in the library. It doesn't properly unsubscribe to topics...
-                                    // Get and settable
-                                    if (payload == "config") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.WriteSettingsToFile(payload).ToString(), false);
+                                                                                                                                 // Get and settable
+                                    if (payload == "config") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.WriteSettingsToFile(payload, Settings.SettingsFilePath()).ToString(), false);
                                     if (payload == "datapoints") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.SetDatapointFile(payload).ToString(), false);
-                                    if (payload == "debug")
-                                    {
-                                        Program.Settings.GENERAL_DEBUGMODE = (payload == "true");
-                                        await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.GENERAL_DEBUGMODE.ToString(), false);
-                                    }
+                                    
 
                                     // Settable only
                                     if (payload == "datapoint") await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.ImportDatapointsOneByOne(payload).ToString(), false);
-                                    
+
                                     break;
                                 }
                             case "RAW":
@@ -358,6 +425,7 @@ namespace xComfortWingman
                                 }
                             case "raw":
                                 {
+                                    //DoLog("Incomming raw data: " + payload, 3, true);
                                     // Convert the human readable string back into the actualy bytes it represents, then sending it to the CI.
                                     payload = payload.Replace(" ", "");
                                     List<byte> byteList = new List<byte>();
@@ -370,31 +438,52 @@ namespace xComfortWingman
                                 }
                             case "cmd":
                                 {
+                                    //string cmd = payload;
                                     if (payload == "exit") Program.StayAlive = false;
-                                    if (payload == "ClearAutoConfig") HomeAssistant.ClearAutoConfig();
-                                    if (payload == "SendAutoConfig") HomeAssistant.SendAutoConfig();
-                                    if (payload == "ReloadAutoConfig") HomeAssistant.ReloadAutoConfig();
-                                    if (payload == "update")
+
+                                    if (payload == "debug")
                                     {
-                                        DoLog("Re-publishing all devices...", false);
-                                        foreach (Homie.Device device in Homie.devices)
-                                        {
-                                            await MQTT.PublishHomieDeviceAsync(device);
-                                        }
-                                        DoLog("Done", 3, true, 10);
+                                        Program.Settings.GENERAL_DEBUGMODE = !Program.Settings.GENERAL_DEBUGMODE;
+                                        await SendMQTTMessageAsync($"{topics[1]}/{topics[2]}/result", Program.Settings.GENERAL_DEBUGMODE.ToString(), false);
+                                        DoLog("Debug mode: " + Program.Settings.GENERAL_DEBUGMODE.ToString(), true);
+                                        Settings.WriteSettingsToFile(Program.Settings, Settings.SettingsFilePath());
                                     }
-                                    if (payload == "pollall")
+                                    
+                                    int SingleDP = 0;
+                                    if (payload.Split(':').Length > 1)
                                     {
-                                        DoLog("Polling all relevant devices...", true);
-                                        foreach (Homie.Device device in Homie.devices)
+                                        Int32.TryParse(payload.Split(':')[1], out SingleDP);
+                                        payload = payload.Split(':')[0];
+                                    }
+                                    
+                                    if (payload == "ClearAutoConfig") HomeAssistant.ClearAutoConfig(SingleDP);
+                                    if (payload == "SendAutoConfig") HomeAssistant.SendAutoConfig(SingleDP);
+                                    if (payload == "ReloadAutoConfig") HomeAssistant.ReloadAutoConfig(SingleDP);
+
+                                    if (Program.Settings.HOMIE_USE_HOMIE)
+                                    {
+                                        if (payload == "update")
                                         {
-                                            if (device.Datapoint.Class == 0)
+                                            DoLog("Re-publishing all devices...", false);
+                                            foreach (Homie.Device device in Homie.devices)
                                             {
-                                                await CI.RequestUpdateAsync(device.Datapoint.DP);
-                                                //System.Threading.Thread.Sleep(500);
+                                                await MQTT.PublishHomieDeviceAsync(device);
                                             }
+                                            DoLog("Done", 3, true, 10);
                                         }
-                                        DoLog("Polling complete!", 3, true, 10);
+                                        if (payload == "pollall")
+                                        {
+                                            DoLog("Polling all relevant devices...", true);
+                                            foreach (Homie.Device device in Homie.devices)
+                                            {
+                                                if (device.Datapoint.Class == 0)
+                                                {
+                                                    await CI.RequestUpdateAsync(device.Datapoint.DP);
+                                                    //System.Threading.Thread.Sleep(500);
+                                                }
+                                            }
+                                            DoLog("Polling complete!", 3, true, 10);
+                                        }
                                     }
                                     break;
                                 }
@@ -425,16 +514,18 @@ namespace xComfortWingman
                 default:    // It's a device's name, we must be more dynamic in our approach.
                     {
                         try
-                        {
-                            if (UseHomeAssistant)
+                        {                           //  0      1        2           3
+                            if (UseHomeAssistant)   //myhome/light/DimLivingroom3/set
                             {
+                                DoLog("THIS SHOULD NOT BE POSSIBLE!", 5);
                                 if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Processing as datapoint related", 2);
-                                if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Looking for device '" + topics[3] + "'...", 2);
-                                HomeAssistant.Device device = HomeAssistant.deviceList.Find(x => x.Name == topics[3]);
+                                if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Looking for device '" + topics[2] + "'...", 2);
+                                HomeAssistant.Device device = HomeAssistant.deviceList.Find(x => x.Name == topics[2]);
                                 if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"...found device: {device.Name}", 2);
-                                switch (topics[4])
+                                switch (topics[3])
                                 {
-                                    case "set": {
+                                    case "set":
+                                        {
                                             Dictionary<string, string> payloadAttributes = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(payload);
                                             if (device.devtype == "Light" && payloadAttributes.ContainsKey("brightness"))
                                             {
@@ -442,9 +533,9 @@ namespace xComfortWingman
                                             }
                                             else
                                             {
-                                                await CI.SendNewValueToDatapointAsync(device.DP, Convert.ToDouble(payloadAttributes["state"].Replace("ON","100").Replace("OFF","0")));
+                                                await CI.SendNewValueToDatapointAsync(device.DP, Convert.ToDouble(payloadAttributes["state"].Replace("ON", "100").Replace("OFF", "0")));
                                             }
-                                            break; 
+                                            break;
                                         }
                                     //case "poll": { await CI.RequestUpdateAsync(device.DP); break; }
                                     default: { DoLog($"Unknown action: {e.ApplicationMessage.Topic}"); break; }
@@ -473,7 +564,7 @@ namespace xComfortWingman
                         }
                         catch (Exception exception)
                         {
-                            DoLog($"Error processing MQTT message: {e.ApplicationMessage.Topic.ToString()}={payload}",5);
+                            DoLog($"Error processing MQTT message: {e.ApplicationMessage.Topic.ToString()}={payload}", 5);
                             LogException(exception);
                         }
                         break;
@@ -524,12 +615,14 @@ namespace xComfortWingman
             {
                 try
                 {
-                    string totaltopic = ($"{Program.Settings.MQTT_BASETOPIC}/{topic}").Replace("//", "/").Replace("//", "/");
-                    if (UseHomeAssistant && topic.EndsWith("/config"))
-                    {
-                        totaltopic = ($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{topic}").Replace("//", "/");
-                        //retainOnServer = true;
-                    }
+                    //string totaltopic = ($"{Program.Settings.MQTT_BASETOPIC}/{topic}").Replace("//", "/").Replace("//", "/");
+                    string totaltopic = ($"{topic}").Replace("//", "/").Replace("//", "/");
+                    //if (UseHomeAssistant && topic.EndsWith("/config"))
+                    //{
+                    //    //totaltopic = ($"{Program.Settings.HOMEASSISTANT_DISCOVERYTOPIC}/{topic}").Replace("//", "/");
+                    //    totaltopic = ($"{topic}").Replace("//", "/").Replace("//", "/");
+                    //    //retainOnServer = true;
+                    //}
                     if (Program.Settings.GENERAL_DEBUGMODE)
                     {
                         MyLogger.DoLog("PUB: " + totaltopic);
@@ -543,6 +636,7 @@ namespace xComfortWingman
                        .WithRetainFlag(retainOnServer)
                        .Build();
                     await mqttClient.PublishAsync(message);
+                    TimeOfLastMQTT = DateTime.Now.Ticks;
                     ConfirmedPublications++;
                 }
                 catch (Exception exception)
@@ -550,7 +644,8 @@ namespace xComfortWingman
                     FailedPublications++;
                     LogException(exception);
                 }
-            } else
+            }
+            else
             {
                 DoLog("MQTT client NOT connected to server!", 4);
             }
@@ -562,15 +657,6 @@ namespace xComfortWingman
             //DoLog("Publishing data structures...", false);
             try
             {
-                //stopwatch.Start();
-                //DoLog("Creating devices from datapoints...", false);
-                //foreach (Datapoint datapoint in CI.datapoints)
-                //{
-                //    Homie.devices.Add(Homie.GetDeviceFromDatapoint(datapoint));
-                //}
-                //DoLog("OK", 3, false, 10);
-                //DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                //stopwatch.Reset();
                 if (UseHomie)
                 {
                     stopwatch.Start();
@@ -583,35 +669,6 @@ namespace xComfortWingman
                     DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                     stopwatch.Reset();
                 }
-
-                //foreach (PublishModel publishModel in MakeDeviceAttributes())
-                //{
-                //    await SendMQTTMessageAsync(publishModel.PublishPath, publishModel.Payload,true);
-                //}
-
-                //stopwatch.Start();
-                //DoLog("Publishing device attributes...", false);
-                //await PublishDeviceAttributes();
-                //DoLog("OK", 3, false, 10);
-                //DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                //stopwatch.Reset();
-
-                ////stopwatch.Start();
-                ////DoLog("Publishing datapoint list...", false);
-                ////await SendMQTTMessageAsync("$nodes", GetNodeList(), true);
-                ////DoLog("OK", 3, false, 10);
-                ////DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                ////stopwatch.Reset();
-
-                //stopwatch.Start();
-                //DoLog("Publishing datapoint attributes...", false);
-                //foreach (Datapoint datapoint in CI.datapoints)
-                //{
-                //    await Homie.PublishDatapointAsNode(datapoint);
-                //}
-                //DoLog("OK", 3, false, 10);
-                //DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                //stopwatch.Stop();
             }
             catch (Exception exception)
             {
@@ -625,12 +682,12 @@ namespace xComfortWingman
 
         private static string GetNodeList()
         {
-            string nodes = "";   
+            string nodes = "";
             foreach (Datapoint dp in CI.datapoints)
             {
                 nodes += $"{ Homie.SanitiseString(dp.Name) },";
             }
-            
+
             if (nodes.EndsWith(',')) nodes = nodes.Remove(nodes.Length - 1);
             return nodes;
         }
@@ -664,11 +721,11 @@ namespace xComfortWingman
         //}
 
         public static async Task PublishHomieDeviceAsync(Homie.Device device)
+        {
+            try
             {
-                try
-                {
 
-                    bool r = true;
+                bool r = true;
                 //                                                                                                                                DEVICE
 
                 //await SendMQTTMessageAsync($"homie/{device.Name}/$homie", device.Homie, r);                                                     //homie/DimKitchen/$homie			              =   3.0.1	
@@ -684,17 +741,17 @@ namespace xComfortWingman
 
 
                 foreach (Homie.Node node in device.Node)
-                    {
-                        //                                                                                                                                       NODE
+                {
+                    //                                                                                                                                       NODE
 
-                        await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}", node.Value, r);                                          //homie/DimKitchen/lights                       =   42
+                    await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}", node.Value, r);                                          //homie/DimKitchen/lights                       =   42
 
-                        //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/$name", node.Name, r);                                     //homie/DimKitchen/lights/$name                 =   Lights
-                        //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/$type", node.Type, r);                                     //homie/DimKitchen/lights/$type                 =   Dimmer
-                        //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/$properties", node.Properties, r);                         //homie/DimKitchen/lights/$properties           =   intensity
+                    //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/$name", node.Name, r);                                     //homie/DimKitchen/lights/$name                 =   Lights
+                    //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/$type", node.Type, r);                                     //homie/DimKitchen/lights/$type                 =   Dimmer
+                    //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/$properties", node.Properties, r);                         //homie/DimKitchen/lights/$properties           =   intensity
 
                     foreach (Homie.Property property in node.PropertyList)
-                        {
+                    {
                         //                                                                                                                                          PROPERTY
                         //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/{property.PathName}/$name", property.Name, r);         //homie/DimKitchen/lights/intensity/$name       =   "Light Intensity"
                         //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/{property.PathName}/$settable", property.Settable, r); //homie/DimKitchen/lights/intensity/$settable   =   "true"
@@ -703,12 +760,13 @@ namespace xComfortWingman
                         //await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/{property.PathName}/$format", property.Format, r);     //homie/DimKitchen/lights/intensity/$format     =   "0:100"
 
                         await SendMQTTMessageAsync($"homie/{device.Name}/{node.PathName}/{property.PathName}", property.DataValue, r);
-                        }
                     }
-                } catch (Exception exception)
-                {
-                    Console.WriteLine(exception.Message);
                 }
             }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception.Message);
             }
+        }
+    }
 }

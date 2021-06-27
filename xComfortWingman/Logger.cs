@@ -13,8 +13,8 @@ namespace xComfortWingman
         {
             if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
-                ConsoleColor fc = Console.ForegroundColor;
-                ConsoleColor bc = Console.BackgroundColor;
+                ConsoleColor fc = (ConsoleColor)Program.Settings.GENERAL_FORECOLOR;
+                ConsoleColor bc = (ConsoleColor)Program.Settings.GENERAL_BACKCOLOR;
                 String date = ($"{DateTime.Now.Year}-{DateTime.Now.Month.ToString("00")}-{DateTime.Now.Day.ToString("00")} {DateTime.Now.Hour.ToString("00")}:{DateTime.Now.Minute.ToString("00")}:{DateTime.Now.Second.ToString("00")}.{DateTime.Now.Millisecond.ToString("000")} - ");
                 String n = "";
                 if (newline) { n = "\n"; }
@@ -85,7 +85,6 @@ namespace xComfortWingman
         {
             if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
-                ConsoleColor currentColor = Console.ForegroundColor;
                 String n = "";
                 if (newline) { n = "\n"; }
                 Console.Write("[");
@@ -112,7 +111,8 @@ namespace xComfortWingman
                     default: { break; }
                 }
                 Console.Write(text);
-                Console.ForegroundColor = currentColor;
+                Console.ForegroundColor = (ConsoleColor)Program.Settings.GENERAL_FORECOLOR;
+                Console.BackgroundColor = (ConsoleColor)Program.Settings.GENERAL_BACKCOLOR;
                 Console.Write("]" + n);
             }
         }
