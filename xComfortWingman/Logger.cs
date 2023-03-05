@@ -9,14 +9,18 @@ namespace xComfortWingman
     {
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
-        public static void DoLog(String text, int level, bool newline)
+        public static void DoLog(String text, int level, bool newline, bool addTimestamp = true)
         {
             if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
-                //ConsoleColor fc = Console.ForegroundColor;
-                //ConsoleColor bc = Console.BackgroundColor;
-                String date = ($"{DateTime.Now.Year}-{DateTime.Now.Month.ToString("00")}-{DateTime.Now.Day.ToString("00")} {DateTime.Now.Hour.ToString("00")}:{DateTime.Now.Minute.ToString("00")}:{DateTime.Now.Second.ToString("00")}.{DateTime.Now.Millisecond.ToString("000")} - ");
+                ConsoleColor fc = (ConsoleColor)Program.Settings.GENERAL_FORECOLOR;
+                ConsoleColor bc = (ConsoleColor)Program.Settings.GENERAL_BACKCOLOR;
+                String date = "";
                 String n = "";
+                if (addTimestamp) date = ($"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:fff")} - ");
+                //{
+                    //date = ($"{DateTime.Now.Year}-{DateTime.Now.Month.ToString("00")}-{DateTime.Now.Day.ToString("00")} {DateTime.Now.Hour.ToString("00")}:{DateTime.Now.Minute.ToString("00")}:{DateTime.Now.Second.ToString("00")}.{DateTime.Now.Millisecond.ToString("000")} - ");
+                //}
                 if (newline) { n = "\n"; }
                 //text = date + text + n;
                 switch (level)
@@ -35,7 +39,9 @@ namespace xComfortWingman
                     case 3: // Default
                     default:
                         {
-                            Console.ResetColor();
+                            //Console.ResetColor();
+                            Console.ForegroundColor = fc;
+                            Console.BackgroundColor = bc;
                             break;
                         }
                     case 2: // Low
@@ -58,9 +64,9 @@ namespace xComfortWingman
                 }
                 Console.Write(date + text + n);
 
-                //Console.ForegroundColor = fc;
-                //Console.BackgroundColor = bc;
-                Console.ResetColor();
+                Console.ForegroundColor = fc;
+                Console.BackgroundColor = bc;
+                //Console.ResetColor();
             }
         }
 
@@ -72,6 +78,11 @@ namespace xComfortWingman
         public static void DoLog(String text, bool newline)
         {
             DoLog(text, 3, newline);
+        }
+
+        public static void DoLog(String text, bool newline, bool addTimestamp)
+        {
+            DoLog(text, 3, newline, addTimestamp);
         }
 
         public static void DoLog(String text, int level)
@@ -109,7 +120,8 @@ namespace xComfortWingman
                     default: { break; }
                 }
                 Console.Write(text);
-                Console.ForegroundColor = ConsoleColor.Gray;
+                Console.ForegroundColor = (ConsoleColor)Program.Settings.GENERAL_FORECOLOR;
+                Console.BackgroundColor = (ConsoleColor)Program.Settings.GENERAL_BACKCOLOR;
                 Console.Write("]" + n);
             }
         }

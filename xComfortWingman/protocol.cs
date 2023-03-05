@@ -449,7 +449,8 @@ namespace xComfortWingman.Protocol
 
         public static class MGW_RX_RSSI
         {
-            //The RSSI value (Received Signal Strength Indication) has the unit “-dBm”; therefore higher values are worse:
+            //The RSSI value (Received Signal Strength Indication) has the unit “-dBm”; therefore higher values are worse:
+
             //Good      ≤ 67            ≤ 0x43
             //Normal    67 < X ≤ 75     0x43 < X ≤ 0x4B
             //Weak      75 < X ≤ 90     0x4B < X ≤ 0x5A

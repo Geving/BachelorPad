@@ -1,19 +1,30 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using static xComfortWingman.MyLogger;
 
 namespace xComfortWingman
 {
     class Program
     {
-        public static readonly Settings Settings = new Settings(true);
+        public static Settings Settings = xComfortWingman.Settings.GetSettings(true);
+        
         public static readonly DateTime ApplicationStart = DateTime.Now;
         public static bool BootWithoutError = true;
         private static bool IllegalArguments = false;
         public static bool StayAlive = true;
+
         static void Main(string[] args)
         {
+            //Setup Console based on settings file
+            Console.ForegroundColor = (ConsoleColor)Settings.GENERAL_FORECOLOR;
+            Console.BackgroundColor = (ConsoleColor)Settings.GENERAL_BACKCOLOR;
+            Console.WindowWidth = Settings.GENERAL_WINDOWWIDTH;
+
+            //dotnet publish "C:\Users\harald.geving\Source\Repos\BachelorPad\" --configuration Release --framework netcoreapp3.1 --self-contained false --runtime linux-arm --verbosity quiet
+            //clear; dotnet publish -r linux-arm -o \\192.168.0.3\c$\wwwpub\harald.geving.no\files
+
             // Handling CLI arguments
             foreach (string arg in args)
             {
@@ -31,6 +42,9 @@ namespace xComfortWingman
                     case "-def": { Settings.DefaultSettings(); break; };
                     case "-nope": { ; break; };
                     case "-debug": { Settings.GENERAL_DEBUGMODE = true; break; };
+                    case "-nodebug": { Settings.GENERAL_DEBUGMODE = false; break; };
+                    case "-s": { Menu.ProcessGroup("all", true); break; }
+                    //case "-clear": { if(HomeAssistant.ClearAutoConfig()==true) return; break; }
                     default:
                         {
                             Console.WriteLine("Unknown argument: " + arg);
@@ -45,46 +59,29 @@ namespace xComfortWingman
             }
             if (IllegalArguments) { return; }
 
-            Menu.MainMenu();
+            Logo.DrawLogo((new Random()).Next(0,5));
 
-
-            DoLog("Starting BachelorPad...",4);
-            if (Settings.GENERAL_FROM_FILE == false) { DoLog("Using default settings!", 4); }
-
-            //if(Settings.DEBUGMODE) { Console.WriteLine(Settings.GetSettingsAsJSON()); Console.ReadLine(); }
-
-            // For easier switching between developer machine and the Raspberry Pi meant for production use.
-            if (System.Net.Dns.GetHostName().ToUpper() == "ORION") 
+            DoLog("Starting xComfort2MQTT bridge...",4);
+            if (Settings.GENERAL_FROM_FILE)
             {
-                Console.WriteLine("YOU ARE NOW RUNNING ON THE DEVELOPER MACHINE!");
-                Settings.MQTT_BASETOPIC = "debugdata";
-                if (ImportDatapointsFromFile("C:\\misc\\" + Settings.GENERAL_DATAPOINTS_FILENAME))
-                {
-                    CreateDevicesOutOfDatapoints();
-                    MQTT.RunMQTTClientAsync().Wait();
-
-                    MQTT.PublishDeviceAsync(Homie.CreateDeviceFromDatapoint(CI.datapoints[4])).Wait();
-                    Console.WriteLine($"Publications: {MQTT.PublicationCounter}");
-                    CI.FakeData(new byte[] { 0x0D, 0xC1, 0x05, 0x70, 0x00, 0x62, 0x00, 0x00, 0x00, 0x00, 0x32, 0x10, 0x0B }).Wait();
-                    //CI.FakeData(new byte[] { 0x0D, 0xC1, 0x31, 0x62, 0x17, 0x00, 0x00, 0xC9, 0x00, 0x00, 0x44, 0x24, 0x01 }).Wait();
-                    while (StayAlive)
-                    {
-                        // Nada!
-                    };
-                };
-                Console.WriteLine("---------------------------------------------------------");
-                while (StayAlive)
-                {
-                    // Nada!
-                };
-                return;
-            };
+                DoLog($"Using external settings file: {Settings.SettingsFilePath()}", 3, true);
+                
+            } else
+            {
+                DoLog($"Using default settings", 2, true);
+            }
+            if (System.IO.File.Exists(Settings.GENERAL_DP_NAMES_FILENAME))
+            {
+                DoLog($"Using external name file: {Settings.GENERAL_DP_NAMES_FILENAME}", 2, true);
+            }
 
 
             BootWithoutError = ImportDatapointsFromFile(Settings.GENERAL_DATAPOINTS_FILENAME);
             if (BootWithoutError) { CreateDevicesOutOfDatapoints(); }
+            //if (BootWithoutError) { PublishAutoConfigForAllDevices(); }
             if (BootWithoutError) { MQTT.RunMQTTClientAsync().Wait(); }
             if (BootWithoutError) { CI.ConnectToCI().Wait(); }
+
             if (BootWithoutError)
             {
                 while (StayAlive)
@@ -92,14 +89,14 @@ namespace xComfortWingman
                     // Just chill, other threads are monitoring communications...
                 }
                 // If this point in the code is reached, it means that a shutdown command has been given via MQTT.
+                DoLog("Terminating due to MQTT command...", 3);
                 MQTT.DisconnectMQTTClientAsync().Wait();
             }
             else
             {
                 DoLog("Something failed during the program startup! Please check the logs for more info.",5);
             }
-
-            DoLog("Terminating...", 4);
+            DoLog("Terminating...", 3);
         }
 
         #region "Datapoints stuff"
@@ -120,15 +117,40 @@ namespace xComfortWingman
 
                 Stopwatch stopwatch = new Stopwatch();
                 stopwatch.Start();
-                DoLog("Importing datapoints from file...", false);
+                DoLog("Importing datapoints from '" + filePath + "'...", false);
 
                 if (!File.Exists(filePath))
                 {
-                    DoLog("FAILED", 3, false, 12);
-                    DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-                    stopwatch.Reset();
-                    DoLog("Datapoint file not found!");
-                    return false;
+                    bool DownloadOnFail = false; //Easy toggle
+                    if (DownloadOnFail)
+                    {
+                        DoLog("FAILED", 3, false, 12);
+                        DoLog("Attempting download...", false);
+                        WebClient webClient = new WebClient();
+                        webClient.DownloadFile("http://harald.geving.no/files/datenpunkte.txt", filePath);
+                        if (!File.Exists(filePath))
+                        {
+                            DoLog("FAILED", 3, false, 12);
+                            DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                            stopwatch.Reset();
+                            DoLog("Datapoint file not found!");
+                            return false;
+                        }
+                        else
+                        {
+                            DoLog("OK", 3, false, 10);
+                            DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                            stopwatch.Reset();
+                        }
+                    }
+                    else
+                    {
+                        DoLog("FAILED", 3, false, 12);
+                        DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                        stopwatch.Reset();
+                        DoLog("Datapoint file not found!");
+                        return false;
+                    }
                 }
                 string aline;
                 FileStream fileStream = new FileStream(filePath, FileMode.Open);
@@ -142,6 +164,35 @@ namespace xComfortWingman
                     }
                 }
                 fileStream.Close();
+
+
+                if (File.Exists(Settings.GENERAL_DP_NAMES_FILENAME))
+                {
+                    int LineCnt = 0;
+                    fileStream = new FileStream(Settings.GENERAL_DP_NAMES_FILENAME, FileMode.Open);
+                    using (StreamReader reader = new StreamReader(fileStream))
+                    {
+                        while ((aline = reader.ReadLine()) != null)
+                        {
+                            LineCnt++;
+                            if (aline[0] != ';' && aline[0] != '#') { //; or # are considered comments. All else will fail!
+                                try
+                                {
+                                    string[] line = aline.Split("\t");
+                                    int renameDP = Convert.ToInt32(line[0]);
+                                    CI.datapoints.Find(x => x.DP == renameDP).PrettyName = line[1];
+                                }catch (Exception exception2)
+                                {
+                                    DoLog($"Error in line {LineCnt} of {Settings.GENERAL_DP_NAMES_FILENAME}: [{aline}]", 4);
+                                    LogException(exception2);
+                                }
+                            }
+                        }
+                    }
+                    fileStream.Close();
+                }
+
+                    
                 DoLog("OK", 3, false, 10);
                 DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                 DoLog($"Total number of datapoints: ", false);
@@ -180,6 +231,7 @@ namespace xComfortWingman
                 if (!File.Exists(Program.Settings.GENERAL_DATAPOINTS_FILENAME))
                 {
                     DoLog("Datapoint file not found!");
+                    
                     return "File not found!";
                 }
                 string everything = "Empty file!";
@@ -220,19 +272,38 @@ namespace xComfortWingman
         private static void CreateDevicesOutOfDatapoints()
         {
             Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-            DoLog("Creating devices from datapoints...", false);
-            foreach (Datapoint datapoint in CI.datapoints)
+
+            if (Program.Settings.HOMIE_USE_HOMIE)
             {
-                Homie.devices.Add(Homie.CreateDeviceFromDatapoint(datapoint));
+                DoLog("Creating Homie devices from datapoints...", true);
+                stopwatch.Start();
+                foreach (Datapoint datapoint in CI.datapoints)
+                {
+                    Homie.devices.Add(Homie.CreateDeviceFromDatapoint(datapoint));
+                }
+                DoLog($"Total number of Homie devices: ", false);
+                DoLog($"{ Homie.devices.Count }", 3, false, 10);
+                DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                stopwatch.Reset();
             }
-            DoLog("OK", 3, false, 10);
-            DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
-            stopwatch.Reset();
-            DoLog($"Total number of devices: ", false);
-            DoLog($"{ Homie.devices.Count}",3,true,10);
+
+            if (Program.Settings.HOMEASSISTANT_USE_HOMEASSISTANT)
+            {
+                DoLog("Creating Home Assistant devices from datapoints...", true);
+                stopwatch.Start();
+                foreach (Datapoint datapoint in CI.datapoints)
+                {
+                    HomeAssistant.SetupNewDevice(datapoint);
+                }
+                DoLog($"Total number of Home Assistant devices: ", false); 
+                DoLog($"{ HomeAssistant.deviceList.Count }", 3, false, 10);
+                DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                stopwatch.Reset();
+            }
         }
         #endregion
+
+        
 
     }
 }

@@ -194,7 +194,7 @@ namespace xComfortWingman
                                 }
                                 else
                                 {
-                                    ar.AsyncWaitHandle.WaitOne(500);
+                                    ar.AsyncWaitHandle.WaitOne(Program.Settings.CI_PACKET_DELAY);
                                 }
                             }
                             uint elapsedTime = (uint)(Environment.TickCount - startTime);
@@ -284,7 +284,7 @@ namespace xComfortWingman
         private static async Task SendThenBlockTransmit(byte[] dataToSend)
         {
             readyToTransmit = false;    // Stop any other thread from sending right now
-
+            DoLog("Blocking all other outbound transmissions!", 1);
             // Prepare the packet by adding extra bytes if needed.
             if (Program.Settings.CI_CONNECTION_MODE == CI_CONNECTION_MODE.RS232_MODE) { dataToSend = AddRS232Bytes(dataToSend); }
             if (dataToSend[0] != 0x00 && dataToSend[0] != Program.Settings.RS232_STARTBYTE) { dataToSend = AddZeroAsFirstByte(dataToSend); }
@@ -292,20 +292,25 @@ namespace xComfortWingman
             Array.Resize(ref dataToSend, myDevice.GetMaxOutputReportLength()); //If we don't fill the buffer, it will repeat the data instead of using 0x00. That causes undersired behavior...
 
             DateTime start = DateTime.Now;
-
+            DoLog("Sending data to CI...", 1);
             switch (Program.Settings.CI_CONNECTION_MODE)
             {
                 case CI_CONNECTION_MODE.RS232_MODE:
                     {
                         com.Write(dataToSend,0,dataToSend.Length);
+                        DoLog("Data sent to CI!",1);
                         break;
                     }
                 case CI_CONNECTION_MODE.USB_MODE:
                     {
                         await myHidStream.WriteAsync(dataToSend, 0, dataToSend.Length, CancellationToken.None);
+                        DoLog("Data sent to CI!", 1);
                         break;
                     }
             }           
+
+            //This blockage doesn't work as intended. 
+            //It seems that the incomming message that is supposed to (re)set 'readyToTransmit' is not processed before this method is done running...
 
             // Crude timeout check works here, because we don't need any strict timing.
             bool preReleased = false;
@@ -313,9 +318,13 @@ namespace xComfortWingman
             {
                 if (readyToTransmit) {
                     preReleased = true; // No need to wait for timeout!
+                    DoLog("Ready to transmit again!");
                     break;
-                } 
+                }
+                DoLog(".", false, false);
+                Thread.Sleep(50); //Reduced from 200
             }
+            DoLog("!", true, false);
             if (!preReleased)
             {
                 DoLog("Transmit blockage timed out!");
@@ -326,7 +335,7 @@ namespace xComfortWingman
         private static async Task IncommingData(byte[] dataFromCI) //We've got data from the CI
         {
             if (dataFromCI[0] == 0) { dataFromCI = RemoveFirstByte(dataFromCI); } // CKOZ-00/14 triggers this, but CKOZ-00/03 doesn't...
-            Console.WriteLine();
+            //Console.WriteLine();
             PrintByte(dataFromCI, "Incomming data");
             /*
             Example of an acknowledgement message (OK_MRF):
@@ -389,7 +398,7 @@ namespace xComfortWingman
             if (!readyToTransmit)
             {
                 // We're not ready, let's wait...
-                DoLog("We're not ready to transmit yet...", 2);
+                DoLog("We're not quite ready to transmit yet...", 2);
                 DateTime start = DateTime.Now;
                 while (!readyToTransmit)
                 {
@@ -401,7 +410,7 @@ namespace xComfortWingman
                         readyToTransmit = true;
                         return;
                     }
-                    Thread.Sleep(200);
+                    Thread.Sleep(50); //Reduced from 200
                 }
             };
 
@@ -452,7 +461,7 @@ namespace xComfortWingman
             if (sequenceCounter >= 15) { sequenceCounter = 0; } // Reset to 0 in order to keep the size to 4 bits.
 
             //Send the data
-            Console.WriteLine();
+            //Console.WriteLine();
             PrintByte(myCommand, "Outgoing data");
             await SendThenBlockTransmit(myCommand);
         }

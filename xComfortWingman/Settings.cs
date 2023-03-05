@@ -17,7 +17,9 @@ namespace xComfortWingman
     public enum CI_CONNECTION_MODE
     {
         USB_MODE,
-        RS232_MODE
+        RS232_MODE,
+        SPECIAL_MODE,
+        DUMMY_MODE
     }
 
     public enum CI_RS232_BAUD
@@ -37,25 +39,30 @@ namespace xComfortWingman
         // General settings
         public bool GENERAL_RAW_ENABLED { get; set; } = true;
         public int GENERAL_RMF_TIMEOUT { get; set; } = 5000;
-        public bool GENERAL_DEBUGMODE { get; set; } = true;
-        public String GENERAL_DATAPOINTS_FILENAME { get; set; } = "Datenpunkte.txt";
+        public bool GENERAL_DEBUGMODE { get; set; } = false;
+        public String GENERAL_DATAPOINTS_FILENAME { get; set; } = "/mydata/datenpunkte.txt";
+        public String GENERAL_DP_NAMES_FILENAME { get; set; } = "/mydata/names.txt";
         public String GENERAL_NAME { get; set; } = "xComfort";
         public bool GENERAL_FROM_FILE { get; set; } = false;
+        public int GENERAL_FORECOLOR { get; set; } = (int)ConsoleColor.Gray;
+        public int GENERAL_BACKCOLOR { get; set; } = (int)ConsoleColor.Black;
+        public int GENERAL_WINDOWWIDTH { get; set; } = 120;
+        public Boolean GENERAL_FILTER_DUPLICATE_DP { get; set; } = false;
 
         // MQTT related settings
         public MQTT_CONNECTION_METHOD MQTT_CONNECTION_METHOD { get; set; } = MQTT_CONNECTION_METHOD.TCP;
-        public string MQTT_SERVER_WEBSOCKET { get; set; } = "destiny.geving.it:1883/mqtt";
-        public string MQTT_SERVER_TCP { get; set; } = "destiny.geving.it";
-        public string MQTT_CLIENT_ID { get; set; } = "bachelorpad_%rnd%";
+        public string MQTT_SERVER_WEBSOCKET { get; set; } = "mqtt.geving.it:1883/mqtt";
+        public string MQTT_SERVER_TCP { get; set; } = "mqtt.geving.it";
+        public string MQTT_CLIENT_ID { get; set; } = "wingman_%rnd%";
         public string MQTT_CRED_USERNAME { get; set; } = "";
         public string MQTT_CRED_PASSWORD { get; set; } = "";
         public bool MQTT_USE_TLS { get; set; } = false;
         public bool MQTT_CLEAN_SESSION { get; set; } = false;
-        public string MQTT_BASETOPIC { get; set; } = "homie/";
-        public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/#/be/subscribed/to" };
+        public string MQTT_BASETOPIC { get; set; } = "myhome";
+        //public string[] MQTT_EXTRA_SUBS { get; set; } = { "example/path", "many/may/go/here", "all/will/+/be/subscribed/to" };
 
         // MQTT HOMIE related
-        public bool HOMIE_USE_HOMIE { get; set; } = true;
+        public bool HOMIE_USE_HOMIE { get; set; } = false;
         public string HOMIE_HOMIE { get; set; } = "3.0"; //{ $"{BaseTopic}$homie", "3.0" },
         public string HOMIE_NAME { get; set; } = "xComfort";    //{ $"{BaseTopic}$name", "3.0" },
         //public string HOMIE_LOCALIP { get; set; }                //{ $"{BaseTopic}$localip", "3.0" },
@@ -70,10 +77,20 @@ namespace xComfortWingman
         //Simple JSON related settings
         public bool BASIC_USE_BASIC { get; set; } = false;
 
+        public bool HOMEASSISTANT_USE_HOMEASSISTANT { get; set; } = true;
+
+        public string HOMEASSISTANT_BASETOPIC { get; set; } = "myhome";
+        public string HOMEASSISTANT_DISCOVERYTOPIC { get; set; } = "homeassistant";
+        public string HOMEASSISTANT_AVAILABILITYTOPIC { get; set; } = "myhome/xcomfort2mqtt/availability";
+        public bool HOMEASSISTANT_USE255ASMAX { get; set; } = false;
+        public int HOMEASSISTANT_HEARTBEATINTERVAL { get; set; } = 60;
+        public int HOMEASSISTANT_AUTOCONFIGINTERVAL { get; set; } = 60;
+
         // Communication Interface related settings
         public CI_CONNECTION_MODE CI_CONNECTION_MODE { get; set; } = CI_CONNECTION_MODE.USB_MODE;
         public byte[][] CI_INTERFACE_INIT_COMMANDS { get; set; } = new byte[10][]; //Allow upto ten sets of commands to be executed at startup
-
+        public string CI_NAME { get; set; } = "/dev/ttyUSB0";
+        public int CI_PACKET_DELAY { get; set; } = 500;
 
         // RS232 related settings (used if CI is connecting in RS232 mode)
         public string RS232_PORT { get; set; } = "COM1";
@@ -83,67 +100,57 @@ namespace xComfortWingman
         public byte RS232_STARTBYTE { get; set; } = 0x5A;
         public byte RS232_STOPTBYTE { get; set; } = 0xA5;
 
-        public Settings DefaultSettings()
+        public static string SettingsFilePath(string DefPath = "")
+        {
+            string[] PossiblePaths = {
+                "settings.json",
+                "./mydata/settings.json",
+                "/mydata/settings.json"
+            };
+            foreach(String path in PossiblePaths)
+            if (System.IO.File.Exists(path)) { return path; }
+            return DefPath;
+        }
+
+        public static Settings DefaultSettings()
         {
             return new Settings();
         }
 
-        public Settings(bool loadFromFile)
+        public static Settings GetSettings(bool loadFromFile = false)
         {
-            if (VerifySettingsFile())
+            Settings settings = new Settings();
+            if (loadFromFile && VerifySettingsFile(SettingsFilePath()))
             {
-                LoadSettings();
-                GENERAL_FROM_FILE = true;
+                settings=ReadSettingsFromFile(SettingsFilePath());
+                settings.GENERAL_FROM_FILE = true;
+                WriteSettingsToFile(settings, SettingsFilePath("settings.json"));
             }
             else
             {
                 ResetToDefault();
             }
+            return settings;
         }
+        
 
-        public Settings()
+        //public Settings()
+        //{
+        // //Keeping this blank will return the defaults until anything else is changed.
+        //}
+
+        public static bool ResetToDefault()
         {
-         //Keeping this blank will return the defaults until anything else is changed.
+            return WriteSettingsToFile(DefaultSettings(), SettingsFilePath("settings.json"));
         }
 
-        public bool ResetToDefault()
-        {
-            return WriteSettingsToFile(DefaultSettings());
-        }
-
-        public void LoadSettings()
-        {
-            Settings settings = ReadSettingsFromFile();
-            GENERAL_RAW_ENABLED = settings.GENERAL_RAW_ENABLED;
-            GENERAL_RMF_TIMEOUT = settings.GENERAL_RMF_TIMEOUT;
-            GENERAL_DEBUGMODE = settings.GENERAL_DEBUGMODE;
-            MQTT_CONNECTION_METHOD = settings.MQTT_CONNECTION_METHOD;
-            MQTT_SERVER_WEBSOCKET = settings.MQTT_SERVER_WEBSOCKET;
-            MQTT_SERVER_TCP = settings.MQTT_SERVER_TCP;
-            MQTT_CLIENT_ID = settings.MQTT_CLIENT_ID;
-            MQTT_CRED_USERNAME = settings.MQTT_CRED_USERNAME;
-            MQTT_CRED_PASSWORD = settings.MQTT_CRED_PASSWORD;
-            MQTT_USE_TLS = settings.MQTT_USE_TLS;
-            MQTT_CLEAN_SESSION = settings.MQTT_CLEAN_SESSION;
-            MQTT_BASETOPIC = settings.MQTT_BASETOPIC;
-            MQTT_EXTRA_SUBS = settings.MQTT_EXTRA_SUBS;
-            CI_CONNECTION_MODE = settings.CI_CONNECTION_MODE;
-            CI_INTERFACE_INIT_COMMANDS = settings.CI_INTERFACE_INIT_COMMANDS;
-            RS232_PORT = settings.RS232_PORT;
-            RS232_BAUD = settings.RS232_BAUD;
-            RS232_FLOW = settings.RS232_FLOW;
-            RS232_CRC = settings.RS232_CRC;
-            RS232_STARTBYTE = settings.RS232_STARTBYTE;
-            RS232_STOPTBYTE = settings.RS232_STOPTBYTE;
-        }
-
-        public bool WriteSettingsToFile(Settings settings)
+        public static bool WriteSettingsToFile(Settings settings, string FilePath)
         {
             try
             {
-                using (StreamWriter w = new StreamWriter("settings.json"))
+                using (StreamWriter w = new StreamWriter(FilePath))
                 {
-                    string json = JsonConvert.SerializeObject(settings);
+                    string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
                     w.WriteLine(json);
                 }
                 return true;
@@ -154,11 +161,11 @@ namespace xComfortWingman
             }
         }
 
-        public bool WriteSettingsToFile(string json)
+        public bool WriteSettingsToFile(string json, string FilePath)
         {
             try
             {
-                using (StreamWriter w = new StreamWriter("settings.json"))
+                using (StreamWriter w = new StreamWriter(FilePath))
                 {
                     w.WriteLine(json);
                 }
@@ -173,15 +180,16 @@ namespace xComfortWingman
 
         public string GetSettingsAsJSON()
         {
-            return JsonConvert.SerializeObject(ReadSettingsFromFile());
+            return JsonConvert.SerializeObject(ReadSettingsFromFile(SettingsFilePath()));
         }
 
-        public Settings ReadSettingsFromFile()
+        public static Settings ReadSettingsFromFile(string FilePath)
         {
+            if(FilePath == "") { return DefaultSettings(); }
             try
             {
                 Settings settings;
-                using (StreamReader r = new StreamReader("settings.json"))
+                using (StreamReader r = new StreamReader(FilePath))
                 {
                     string json = r.ReadToEnd();
                     settings = JsonConvert.DeserializeObject<Settings>(json);
@@ -194,12 +202,13 @@ namespace xComfortWingman
             }
         }
 
-        private bool VerifySettingsFile()
+        private static bool VerifySettingsFile(string FilePath)
         {
+            if (FilePath == "") { return false; }
             try
             {
                 Settings settings;
-                using (StreamReader r = new StreamReader("settings.json"))
+                using (StreamReader r = new StreamReader(FilePath))
                 {
                     string json = r.ReadToEnd();
                     settings = JsonConvert.DeserializeObject<Settings>(json);
