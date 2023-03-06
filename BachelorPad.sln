@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.136
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "xComfortWingman", "xComfortWingman\xComfortWingman.csproj", "{614EB06C-6ABB-4CF1-9121-C6F44A4694D4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "xComfort2MQTT", "xComfortWingman\xComfort2MQTT.csproj", "{614EB06C-6ABB-4CF1-9121-C6F44A4694D4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

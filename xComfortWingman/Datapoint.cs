@@ -35,6 +35,8 @@ namespace xComfortWingman
         public Protocol.PT_RX.Packet LatestDataValues { get; set; } = new Protocol.PT_RX.Packet( 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,new byte[]{ 0x00, 0x00, 0x00, 0x00 }, 0x00, 0x00, 0x00 );
         public DateTime? LastUpdate { get; set; }
 
+        public string PrettyName { get; set; }
+
         public override string ToString()
         {
             return (DP + "\t" + Name + "\t" + Serial + "\t" + Type + "\t" + Channel + "\t" + Mode + "\t" + Class + "\t" + Reserved);

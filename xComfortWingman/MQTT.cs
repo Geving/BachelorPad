@@ -257,6 +257,7 @@ namespace xComfortWingman
                     if (topic.EndsWith("/")) { await mqttClient.SubscribeAsync(new TopicFilterBuilder().WithTopic(topic.Remove(topic.Length - 1)).Build()); } // This allows us to subscribe to both topics at once.
                     if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Subscribing to {topic}", 2);
                 }
+                if (Program.Settings.GENERAL_DEBUGMODE) DoLog($"Subscriptions complete!", 2);
 
                 int BeatInterval = Program.Settings.HOMEASSISTANT_HEARTBEATINTERVAL;
                 int BeatCount = 0;

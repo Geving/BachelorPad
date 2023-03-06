@@ -23,7 +23,7 @@ namespace xComfortWingman
 
         public static void MainMenu()
         {
-            def.ResetToDefault();
+            Settings.ResetToDefault();
             Console.Clear();
             Console.WriteLine($"Welcome!");
             Console.WriteLine($"");
@@ -94,7 +94,7 @@ namespace xComfortWingman
                     {
                         Console.Clear();
                         Console.Write("Writing settings to file...");
-                        Console.WriteLine(Program.Settings.WriteSettingsToFile(Program.Settings) ? "[OK]" : "[FAIL]");
+                        Console.WriteLine(Settings.WriteSettingsToFile(Program.Settings,"settings.json") ? "[OK]" : "[FAIL]");
                         Console.WriteLine("Press any key to return to the menu...");
                         Console.ReadKey();
                         break;
@@ -111,7 +111,7 @@ namespace xComfortWingman
                 case "5":
                     {
                         Console.WriteLine("Please type 'default' to confirm that you want to reset all settings to their default values:");
-                        if (Console.ReadLine().Replace("'","") == "default" ) { Program.Settings.ResetToDefault(); }
+                        if (Console.ReadLine().Replace("'","") == "default" ) { Settings.ResetToDefault(); }
                         break;
                     }
                 case "0":
@@ -193,7 +193,7 @@ namespace xComfortWingman
             ProcessSettingsMenu(ViewOnly);
         }
 
-        private static void ProcessGroup(string FilterText, bool ViewOnly)
+        public static void ProcessGroup(string FilterText, bool ViewOnly)
         {
             foreach (System.Reflection.PropertyInfo info in Program.Settings.GetType().GetProperties())
             {

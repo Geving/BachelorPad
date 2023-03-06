@@ -2,6 +2,7 @@
 using NLog;
 using System.Collections.Generic;
 using System.Text;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace xComfortWingman
 {
@@ -11,18 +12,15 @@ namespace xComfortWingman
 
         public static void DoLog(String text, int level, bool newline, bool addTimestamp = true)
         {
+            String date = "";
+            String n = "";
+            if (addTimestamp) date = ($"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:fff")} - ");
+            if (newline) { n = "\n"; }
             if (level > 2 || Program.Settings.GENERAL_DEBUGMODE)
             {
                 ConsoleColor fc = (ConsoleColor)Program.Settings.GENERAL_FORECOLOR;
                 ConsoleColor bc = (ConsoleColor)Program.Settings.GENERAL_BACKCOLOR;
-                String date = "";
-                String n = "";
-                if (addTimestamp) date = ($"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:fff")} - ");
-                //{
-                    //date = ($"{DateTime.Now.Year}-{DateTime.Now.Month.ToString("00")}-{DateTime.Now.Day.ToString("00")} {DateTime.Now.Hour.ToString("00")}:{DateTime.Now.Minute.ToString("00")}:{DateTime.Now.Second.ToString("00")}.{DateTime.Now.Millisecond.ToString("000")} - ");
-                //}
-                if (newline) { n = "\n"; }
-                //text = date + text + n;
+                
                 switch (level)
                 {
                     case 5: // Max
@@ -39,7 +37,6 @@ namespace xComfortWingman
                     case 3: // Default
                     default:
                         {
-                            //Console.ResetColor();
                             Console.ForegroundColor = fc;
                             Console.BackgroundColor = bc;
                             break;
@@ -57,8 +54,6 @@ namespace xComfortWingman
                     case 0:
                         {
                             Console.ForegroundColor = ConsoleColor.DarkMagenta;
-                            //Console.BackgroundColor = ConsoleColor.DarkMagenta;
-                            //Console.ForegroundColor = ConsoleColor.White;
                             break;
                         }
                 }
@@ -66,8 +61,8 @@ namespace xComfortWingman
 
                 Console.ForegroundColor = fc;
                 Console.BackgroundColor = bc;
-                //Console.ResetColor();
             }
+            if (Program.Settings.GENERAL_OUTPUT_TO_FILE) { System.IO.File.AppendAllText(Program.Settings.GENERAL_OUTPUT_FILE, date + text + n); }
         }
 
         public static void DoLog(String text)
@@ -124,12 +119,14 @@ namespace xComfortWingman
                 Console.BackgroundColor = (ConsoleColor)Program.Settings.GENERAL_BACKCOLOR;
                 Console.Write("]" + n);
             }
+            if(Program.Settings.GENERAL_OUTPUT_TO_FILE) { System.IO.File.AppendAllText(Program.Settings.GENERAL_OUTPUT_FILE, text); }
         }
 
         public static void LogException(Exception exception)
         {
             DoLog(exception.Message, 5);
             logger.Error(exception);
+            if (Program.Settings.GENERAL_OUTPUT_TO_FILE) { System.IO.File.AppendAllText(Program.Settings.GENERAL_OUTPUT_FILE, exception.Message); }
         }
     }
 }

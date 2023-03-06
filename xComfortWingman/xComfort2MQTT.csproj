@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk;Microsoft.NET.Sdk.Publish">
+	<PropertyGroup>
+		<Deterministic>false</Deterministic>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net7.0</TargetFramework>
+		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+		<AssemblyVersion>1.2.*</AssemblyVersion>
+		<Description>Using MQTT to allow third party software to communicate with xComfort</Description>
+		<Company>Geving IT</Company>
+		<FileVersion>1.2.0.0</FileVersion>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="HidSharp" Version="2.1.0" />
+		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.10.9" />
+		<PackageReference Include="MQTTnet" Version="2.8.5" />
+		<PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+		<PackageReference Include="NLog" Version="4.7.3" />
+		<PackageReference Include="NLog.Config" Version="4.7.3" />
+		<PackageReference Include="System.IO.Ports" Version="4.7.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Update="datenpunkte.txt">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+</Project>

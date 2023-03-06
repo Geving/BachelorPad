@@ -133,7 +133,7 @@ namespace xComfortWingman
         {
             //Console.Write("Connecting to CI...");
             Stopwatch stopwatch = new Stopwatch();
-            DoLog("Connecting to CI device...", false);
+            DoLog("Looking for CI device...", false);
             stopwatch.Start();
             var list = DeviceList.Local;
             //list.Changed += (sender, e) => DoLog("Device list changed."); //We don't need to implement support for hotswap right now... 
@@ -143,6 +143,7 @@ namespace xComfortWingman
                 if (dev.VendorID == 0x188A && dev.ProductID == 0x1101)
                 {
                     //We have found the CI!
+                    DoLog("OK", 3, false, 10);
                     myDevice = dev;
                     break;
                 }
@@ -150,9 +151,10 @@ namespace xComfortWingman
             if (myDevice != null)
             {
                 var reportDescriptor = myDevice.GetReportDescriptor();
-
+                DoLog("Opening CI device...", false);
                 if (myDevice.TryOpen(out myHidStream))//HidStream hidStream))
                 {
+                    
                     DoLog("OK", 3, false, 10);
                     DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                     stopwatch.Stop();
@@ -208,7 +210,15 @@ namespace xComfortWingman
                     DoLog("FAIL", 3, true, 14);
                     DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
                     //return false;
+                    DoLog($"Found {allHidList.Length} HID devices", true);
                 }
+            }
+            else
+            {
+                DoLog("FAIL", 3, true, 14);
+                DoLog($"{stopwatch.ElapsedMilliseconds}ms", 3, true, 14);
+                //return false;
+                DoLog($"Found {allHidList.Length} HID devices", true);
             }
             //return false;
         }
@@ -231,9 +241,16 @@ namespace xComfortWingman
 
                 //{ 0x5A, 0x06, 0xB1, 0x02, 0x0A, 0x01, 0x70, 0xA5 }; // Turns on DP #2
 
-                byte[] myCommand = { 0x5A, 0x04, 0xB2, 0x1B, 0x00, 0xA5 }; // Requests the software versions of the interface 
-                PrintByte(myCommand, "Requesting software version");
-                com.Write(myCommand, 0, 6);
+                byte[] myCommand1 = { 0x5A, 0x04, 0xB2, 0x0E, 0x00, 0xA5 }; // Requests the software versions of the interface 
+                PrintByte(myCommand1, "Requesting serial number");
+                com.Write(myCommand1, 0, 6);
+                byte[] myCommand2 = { 0x5A, 0x04, 0xB2, 0x1B, 0x00, 0xA5 }; // Requests the software versions of the interface 
+                PrintByte(myCommand2, "Requesting software version");
+                com.Write(myCommand2, 0, 6);
+                //byte[] myCommand3 = { 0x5A, 0x04, 0xB2, 0x03, 0x08, 0xA5 }; // Requests the software versions of the interface 
+                //PrintByte(myCommand3, "Setting baudrate");
+                //com.Write(myCommand3, 0, 6);
+
             } catch (Exception exception)
             {
                 Program.BootWithoutError = false;
@@ -246,7 +263,16 @@ namespace xComfortWingman
             //DoLog("Receiving data:");
             System.IO.Ports.SerialPort sp = (System.IO.Ports.SerialPort)sender;
 
-            string myData = sp.ReadExisting();
+            //byte[] myData = null;
+            //Array.Resize(ref myData, sp.BytesToRead);
+
+            //for (int i = 0; i < sp.BytesToRead; i++)
+            //{
+            //    myData[i] = (byte)sp.ReadByte();
+            //}
+            sp.Encoding= Encoding.Latin1; //Don't like this one... Perhaps use the above loop instead?
+            string myData = sp.ReadExisting(); 
+            
             int cmdLength = 0;
             foreach (byte b in myData)
             {
@@ -266,7 +292,7 @@ namespace xComfortWingman
                         acceptingData = false;
                         byte[] dataAsBytes = receivedData.ToArray();
                         dataAsBytes = RemoveRS232Bytes(dataAsBytes);
-                        PrintByte(dataAsBytes, "Serial data");
+                        //PrintByte(dataAsBytes, "Serial data");
                         IncommingData(dataAsBytes).Wait();
                         receivedData.Clear();
                     }
@@ -336,7 +362,7 @@ namespace xComfortWingman
         {
             if (dataFromCI[0] == 0) { dataFromCI = RemoveFirstByte(dataFromCI); } // CKOZ-00/14 triggers this, but CKOZ-00/03 doesn't...
             //Console.WriteLine();
-            PrintByte(dataFromCI, "Incomming data");
+            if (Program.Settings.GENERAL_DEBUGMODE) { PrintByte(dataFromCI, "Incomming data"); }
             /*
             Example of an acknowledgement message (OK_MRF):
                     Start   Len     Type    St-Type     Status  Seq+Pri     Ack                         Stop
@@ -363,8 +389,10 @@ namespace xComfortWingman
                 case Protocol.MGW_TYPE.MGW_PT_RX: // Incomming transmission from some device
                     {
                         DoLog("This was a RX packet", 1);
-                        //                          Length          Type          Datapoint       Msg type      Data type      Info short               {   Data 0          Data 1          Data 2          Data 3   }      RSSI            Battery
-                        HandleRX(new PT_RX.Packet(dataFromCI[0], dataFromCI[1], dataFromCI[2], dataFromCI[3], dataFromCI[4], dataFromCI[5], new byte[4] { dataFromCI[9], dataFromCI[8], dataFromCI[7], dataFromCI[6] }, dataFromCI[10], dataFromCI[11], dataFromCI[12]), true);
+                        byte MGW_RX_EXTENDED = 0;
+                        if(dataFromCI.Length==13) { MGW_RX_EXTENDED = dataFromCI[12]; }
+                        //                          Length          Type          Datapoint       Msg type      Data type      Info short               {   Data 0          Data 1          Data 2          Data 3   }      RSSI            Battery     Extended (sometimes used)
+                        HandleRX(new PT_RX.Packet(dataFromCI[0], dataFromCI[1], dataFromCI[2], dataFromCI[3], dataFromCI[4], dataFromCI[5], new byte[4] { dataFromCI[9], dataFromCI[8], dataFromCI[7], dataFromCI[6] }, dataFromCI[10], dataFromCI[11], MGW_RX_EXTENDED), true);
                         break;
                     }
                 case Protocol.MGW_TYPE.MGW_PT_TX: // This is strictly speaking a packet type that we are sending, never receiving...
@@ -378,7 +406,7 @@ namespace xComfortWingman
                         DoLog("Config data!");
                         break;
                     }
-                case Protocol.MGW_TYPE.MGW_PT_STATUS: // Incomming status. Generated by the interface device, not arrived (directly) by radio transmissions.
+                case Protocol.MGW_TYPE.MGW_PT_STATUS: // Incomming status. Generated by the interface device, not arrived (directly) by radio transmissions.case Protocol.MGW_TYPE.MGW_PT_STATUS: // Incomming status. Generated by the interface device, not arrived (directly) by radio transmissions.
                     {
                         DoLog("This was a status packet", 1);
                         //                                Length         Type           StatusType     Status         StatusData {   Data 0          Data 1          Data 2          Data 3   }
@@ -387,7 +415,7 @@ namespace xComfortWingman
                     }
                 default:
                     {
-                        DoLog("Unexpected type: " + Convert.ToString(MGW_TYPE, 16).ToUpper().PadLeft(2, '0'), 4);
+                        DoLog($"Unexpected type: {AsHex(MGW_TYPE)}");
                         break;
                     }
             }
@@ -665,7 +693,8 @@ namespace xComfortWingman
                                 }
                             default:
                                 {
-                                    DoLog($"Unknown status data for MGW_STT_OK: {statusPacket.MGW_ST_DATA[0]}", 4);
+                                    DoLog($"Unknown status data for MGW_STT_OK: { AsHex(statusPacket.MGW_ST_DATA[0]) }", 4);
+
                                     break;
                                 }
                         }
@@ -723,7 +752,7 @@ namespace xComfortWingman
                                 }
                             default:
                                 {
-                                    DoLog($"Unknown baudrate: {statusPacket.MGW_ST_STATUS}", 4);
+                                    DoLog($"Unknown baudrate: {AsHex(statusPacket.MGW_ST_STATUS)}", 4);
                                     break;
                                 }
                         }
@@ -745,7 +774,7 @@ namespace xComfortWingman
                                 }
                             default: //Unknown
                                 {
-                                    DoLog($"Unknown CRC status: {statusPacket.MGW_ST_STATUS}", 4);
+                                    DoLog($"Unknown CRC status: {AsHex(statusPacket.MGW_ST_STATUS)}", 4);
                                     break;
                                 }
                         }
@@ -767,7 +796,7 @@ namespace xComfortWingman
                                 }
                             default: //Unknown
                                 {
-                                    DoLog($"Unknown flow control status: {statusPacket.MGW_ST_STATUS}", 4);
+                                    DoLog($"Unknown flow control status: {AsHex(statusPacket.MGW_ST_STATUS)}", 4);
                                     break;
                                 }
                         }
@@ -789,7 +818,7 @@ namespace xComfortWingman
                                 }
                             default: //Unknown
                                 {
-                                    DoLog($"Unknown Tg-class status: {statusPacket.MGW_ST_STATUS}", 4);
+                                    DoLog($"Unknown Tg-class status: {AsHex(statusPacket.MGW_ST_STATUS)}", 4);
                                     break;
                                 }
                         }
@@ -811,7 +840,7 @@ namespace xComfortWingman
                                 }
                             default: //Unknown
                                 {
-                                    DoLog($"Unknown OK_MRF status: {statusPacket.MGW_ST_STATUS}", 4);
+                                    DoLog($"Unknown OK_MRF status: {AsHex(statusPacket.MGW_ST_STATUS)}", 4);
                                     break;
                                 }
                         }
@@ -841,9 +870,9 @@ namespace xComfortWingman
                     }
                 case PT_STATUS.MGW_ST_TYPE.MGW_STT_SERIAL:
                     {
-                        Console.Write($"Serial: { BitConverter.ToInt32(statusPacket.MGW_ST_DATA, 0)}");
+                        //Console.Write($"Serial: { BitConverter.ToInt32(statusPacket.MGW_ST_DATA, 0)}");
                         Array.Reverse(statusPacket.MGW_ST_DATA);
-                        DoLog($" or { BitConverter.ToInt32(statusPacket.MGW_ST_DATA, 0)} ?");
+                        DoLog($"Serial: { BitConverter.ToInt32(statusPacket.MGW_ST_DATA, 0)}");
 
                         break;
                     }
@@ -891,7 +920,8 @@ namespace xComfortWingman
                     }
                 default:
                     {
-                        DoLog($"Unknown status type: {statusPacket.MGW_ST_TYPE }", 4);
+                        //DoLog($"Unknown status type: {statusPacket.MGW_ST_TYPE }", 4);
+                        DoLog($"Unknown status type: { AsHex(statusPacket.MGW_ST_TYPE) }", 4);
                         break;
                     }
             }
@@ -906,10 +936,10 @@ namespace xComfortWingman
                 Datapoint datapoint = datapoints.Find(x => x.DP == rxPacket.MGW_RX_DATAPOINT);
                 if (datapoint == null)
                 {
-                    DoLog("Datapoint " + rxPacket.MGW_RX_DATAPOINT + " was not found!", 4);
+                    DoLog($"Datapoint {rxPacket.MGW_RX_DATAPOINT} ({AsHex(rxPacket.MGW_RX_DATAPOINT)}) was not found!", 4);
                     //Unfortunately, there is no way to create a new datapoint from the rxPacket.
                     //All that can be done is to alert the user and move on...
-                    MQTT.SendMQTTMessageAsync("info",$"CI received data from an unknown datapoint: {rxPacket.MGW_RX_DATAPOINT}. Is it time to update the datapoints.txt file perhaps?", false).Wait();
+                    MQTT.SendMQTTMessageAsync("info",$"CI received data from an unknown datapoint: {rxPacket.MGW_RX_DATAPOINT} ({AsHex(rxPacket.MGW_RX_DATAPOINT)}). Is it time to update the datapoints.txt file perhaps?", false).Wait();
                     return;
                 }
                 DeviceType devicetype = devicetypes.Find(x => x.Number == datapoint.Type);
@@ -1076,12 +1106,18 @@ namespace xComfortWingman
 
                                                         // Homie specific workaround because Room Controllers sends two pieces of data at once.
                                                         Homie.Device device = (Homie.devices.Find(x => x.Datapoint.DP == datapoint.DP));
-                                                        Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
-                                                        Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
-                                                        property = node.PropertyList.Find(x => x.PathName == "wheelposition");
-                                                        Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
-
+                                                        if (device != null)
+                                                        {
+                                                            Homie.Node node = device.Node.Find(x => x.PathName == "roomcontroller1");
+                                                            Homie.Property property = node.PropertyList.Find(x => x.PathName == "temperature");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/temperature", property, data[1].ToString()).Wait();
+                                                            property = node.PropertyList.Find(x => x.PathName == "wheelposition");
+                                                            Homie.UpdateSingleProperty($"{device.Name}/roomcontroller1/wheelposition", property, data[0].ToString()).Wait();
+                                                        }
+                                                        else
+                                                        {
+                                                            DoLog("Device not found! Consider checking your datapoints file...", true);
+                                                        }
 
                                                         break;
                                                     }
@@ -1298,7 +1334,7 @@ namespace xComfortWingman
                 //    //await MQTT.PublishArrayElement(arrayElement);
                 //    await Homie.PublishDatapointAsNode(datapoint);
                 //}
-                await MQTT.PublishDeviceAsync(device);
+                await MQTT.PublishHomieDeviceAsync(device);
                 //await Homie.PublishDatapointAsNode(datapoint);
 
                 //await MQTT.SendMQTTMessageAsync("BachelorPad/xComfort/" + dataPointID + "/set/", dataValue);
@@ -1319,7 +1355,7 @@ namespace xComfortWingman
                 //This is where we tell BachelorPad about the change that has been made.
                 DoLog("Datapoint " + dataPointID + " (" + datapoint.Name + ") just confirmed value " + dataValue);
                 await Homie.UpdateDeviceData(device, packet);
-                await MQTT.PublishDeviceAsync(device);
+                await MQTT.PublishHomieDeviceAsync(device);
                 //Homie.ArrayElement arrayElement = Homie.GetArrayElement(dataPointID);
                 //Homie.UpdateArrayElement(arrayElement, dataValue);
                 //await MQTT.SendMQTTMessageAsync(arrayElement.PublishPath, dataValue, true);
@@ -1652,6 +1688,11 @@ namespace xComfortWingman
         {
             DoLog("Faking data!",4);
             await IncommingData(FakeData);
+        }
+
+        public static string AsHex(byte data)
+        {
+            return Convert.ToString(data, 16).ToUpper().PadLeft(2, '0');
         }
 
         #endregion

@@ -2,12 +2,14 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using static xComfortWingman.MyLogger;
 
 namespace xComfortWingman
 {
     class Program
     {
+
         public static Settings Settings = xComfortWingman.Settings.GetSettings(true);
         
         public static readonly DateTime ApplicationStart = DateTime.Now;
@@ -20,10 +22,10 @@ namespace xComfortWingman
             //Setup Console based on settings file
             Console.ForegroundColor = (ConsoleColor)Settings.GENERAL_FORECOLOR;
             Console.BackgroundColor = (ConsoleColor)Settings.GENERAL_BACKCOLOR;
-            Console.WindowWidth = Settings.GENERAL_WINDOWWIDTH;
-
-            //dotnet publish "C:\Users\harald.geving\Source\Repos\BachelorPad\" --configuration Release --framework netcoreapp3.1 --self-contained false --runtime linux-arm --verbosity quiet
-            //clear; dotnet publish -r linux-arm -o \\192.168.0.3\c$\wwwpub\harald.geving.no\files
+            //Console.WindowWidth = Settings.GENERAL_WINDOWWIDTH;
+            Version appVersion = Assembly.GetExecutingAssembly().GetName().Version;
+            
+            DoLog($"Starting {Assembly.GetExecutingAssembly().GetName().Name} v.{appVersion.Major}.{appVersion.Minor}.{appVersion.Build}.{appVersion.Revision}" );
 
             // Handling CLI arguments
             foreach (string arg in args)

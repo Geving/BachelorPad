@@ -239,7 +239,7 @@ namespace xComfortWingman.Protocol
                                                         //              Bit 5-8: Reserved
 
             //                 Length        Type           Datapoint              Msg type              Data type              Info short               {   Data 0          Data 1          Data 2          Data 3   }      RSSI            Battery        Extended
-            public Packet(byte mGW_LEN, byte mGW_TYPE, byte mGW_RX_DATAPOINT, byte mGW_RX_MSG_TYPE, byte mGW_RX_DATA_TYPE, byte mGW_RX_INFO_SHORT, byte[] mGW_RX_DATA, byte mGW_RX_RSSI, byte mGW_RX_BATTERY, byte mGW_RX_EXTENDED)
+            public Packet(byte mGW_LEN, byte mGW_TYPE, byte mGW_RX_DATAPOINT, byte mGW_RX_MSG_TYPE, byte mGW_RX_DATA_TYPE, byte mGW_RX_INFO_SHORT, byte[] mGW_RX_DATA, byte mGW_RX_RSSI, byte mGW_RX_BATTERY, byte mGW_RX_EXTENDED = 0)
             {
                 MGW_LEN = mGW_LEN;
                 MGW_TYPE = mGW_TYPE;

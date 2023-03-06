@@ -40,6 +40,8 @@ namespace xComfortWingman
         public bool GENERAL_RAW_ENABLED { get; set; } = true;
         public int GENERAL_RMF_TIMEOUT { get; set; } = 5000;
         public bool GENERAL_DEBUGMODE { get; set; } = false;
+        public bool GENERAL_OUTPUT_TO_FILE { get; set; } = false;
+        public string GENERAL_OUTPUT_FILE { get; set; } = "/mydata/output.log";
         public String GENERAL_DATAPOINTS_FILENAME { get; set; } = "/mydata/datenpunkte.txt";
         public String GENERAL_DP_NAMES_FILENAME { get; set; } = "/mydata/names.txt";
         public String GENERAL_NAME { get; set; } = "xComfort";
@@ -132,7 +134,34 @@ namespace xComfortWingman
             }
             return settings;
         }
-        
+
+        public void LoadSettings()
+        {
+            Settings settings = ReadSettingsFromFile("");
+            GENERAL_RAW_ENABLED = settings.GENERAL_RAW_ENABLED;
+            GENERAL_RMF_TIMEOUT = settings.GENERAL_RMF_TIMEOUT;
+            GENERAL_DEBUGMODE = settings.GENERAL_DEBUGMODE;
+            GENERAL_OUTPUT_FILE = settings.GENERAL_OUTPUT_FILE;
+            GENERAL_OUTPUT_TO_FILE = settings.GENERAL_OUTPUT_TO_FILE;
+            MQTT_CONNECTION_METHOD = settings.MQTT_CONNECTION_METHOD;
+            MQTT_SERVER_WEBSOCKET = settings.MQTT_SERVER_WEBSOCKET;
+            MQTT_SERVER_TCP = settings.MQTT_SERVER_TCP;
+            MQTT_CLIENT_ID = settings.MQTT_CLIENT_ID;
+            MQTT_CRED_USERNAME = settings.MQTT_CRED_USERNAME;
+            MQTT_CRED_PASSWORD = settings.MQTT_CRED_PASSWORD;
+            MQTT_USE_TLS = settings.MQTT_USE_TLS;
+            MQTT_CLEAN_SESSION = settings.MQTT_CLEAN_SESSION;
+            MQTT_BASETOPIC = settings.MQTT_BASETOPIC;
+            //MQTT_EXTRA_SUBS = settings.MQTT_EXTRA_SUBS;
+            CI_CONNECTION_MODE = settings.CI_CONNECTION_MODE;
+            CI_INTERFACE_INIT_COMMANDS = settings.CI_INTERFACE_INIT_COMMANDS;
+            RS232_PORT = settings.RS232_PORT;
+            RS232_BAUD = settings.RS232_BAUD;
+            RS232_FLOW = settings.RS232_FLOW;
+            RS232_CRC = settings.RS232_CRC;
+            RS232_STARTBYTE = settings.RS232_STARTBYTE;
+            RS232_STOPTBYTE = settings.RS232_STOPTBYTE;
+        }
 
         //public Settings()
         //{
