@@ -127,9 +127,9 @@ namespace xComfortWingman
                     if (DownloadOnFail)
                     {
                         DoLog("FAILED", 3, false, 12);
-                        DoLog("Attempting download...", false);
-                        WebClient webClient = new WebClient();
-                        webClient.DownloadFile("http://harald.geving.no/files/datenpunkte.txt", filePath);
+                        //DoLog("Attempting download...", false);
+                        //WebClient webClient = new WebClient();
+                        //webClient.DownloadFile("https://harald.geving.no/files/datenpunkte.txt", filePath);
                         if (!File.Exists(filePath))
                         {
                             DoLog("FAILED", 3, false, 12);
